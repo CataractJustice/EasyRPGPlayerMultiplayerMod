@@ -37,6 +37,11 @@
 #include "audio_secache.h"
 #include "feature.h"
 
+//multiplayer
+#include "multiplayer/connection.h"
+#include "multiplayer/chat.h"
+#include "multiplayer/packets/systempacket.h"
+
 Game_System::Game_System()
 	: dbsys(&lcf::Data::system)
 { }
@@ -220,6 +225,10 @@ void Game_System::ReloadSystemGraphic() {
 	request->SetImportantFile(true);
 	request->SetGraphicFile(true);
 	request->Start();
+	//Multiplayer
+	sendPacket(OSystemPacket((std::string)GetSystemName()));
+	if(Chat::HasInstance())
+		Chat::Instance().SetSystem(Cache::System(GetSystemName()));
 }
 
 void Game_System::SetSystemGraphic(const std::string& new_system_name,

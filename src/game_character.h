@@ -39,7 +39,8 @@ public:
 	enum Type {
 		Event,
 		Player,
-		Vehicle
+		Vehicle,
+        MPlayer
 	};
 
 	static StringView TypeToStr(Type t);
@@ -967,10 +968,6 @@ inline int Game_Character::GetFacing() const {
 	return data()->facing;
 }
 
-inline void Game_Character::SetFacing(int new_facing) {
-	data()->facing = new_facing;
-}
-
 inline bool Game_Character::IsFacingLocked() const {
 	return data()->lock_facing;
 }
@@ -993,10 +990,6 @@ inline bool Game_Character::IsOverlapForbidden() const {
 
 inline int Game_Character::GetMoveSpeed() const {
 	return data()->move_speed;
-}
-
-inline void Game_Character::SetMoveSpeed(int speed) {
-	data()->move_speed = speed;
 }
 
 inline int Game_Character::GetMoveFrequency() const {
@@ -1041,11 +1034,6 @@ inline void Game_Character::SetMoveRouteFinished(bool finished) {
 
 inline const std::string& Game_Character::GetSpriteName() const {
 	return data()->sprite_name;
-}
-
-inline void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
-	data()->sprite_name = std::move(sprite_name);
-	data()->sprite_id = index;
 }
 
 inline void Game_Character::MoveRouteSetSpriteGraphic(std::string sprite_name, int index) {
@@ -1209,10 +1197,6 @@ inline int Game_Character::GetTransparency() const {
 	return data()->transparency;
 }
 
-inline void Game_Character::SetTransparency(int value) {
-	data()->transparency = Utils::Clamp(value, 0, 7);
-}
-
 inline bool Game_Character::IsProcessed() const {
 	return data()->processed;
 }
@@ -1243,10 +1227,6 @@ inline bool Game_Character::HasTileSprite() const {
 
 inline int Game_Character::GetTileId() const {
 	return HasTileSprite() ? GetSpriteIndex() : 0;
-}
-
-inline void Game_Character::SetSpriteHidden(bool hidden) {
-	data()->sprite_hidden = hidden;
 }
 
 inline bool Game_Character::IsSpriteHidden() const {

@@ -23,6 +23,9 @@
 #include "bitmap.h"
 #include "feature.h"
 
+//Multiplayer
+#include "multiplayer/multiplayercharacter.h"
+
 Window_MenuStatus::Window_MenuStatus(int ix, int iy, int iwidth, int iheight) :
 	Window_Selectable(ix, iy, iwidth, iheight) {
 
@@ -65,6 +68,33 @@ void Window_MenuStatus::Refresh() {
 		int digits = (actor.MaxHpValue() >= 1000 || actor.MaxSpValue() >= 1000) ? 4 : 3;
 		DrawActorHp(actor, 48 + 8 + 106 + text_offset - (digits == 3 ? 0 : 12), i * 48 + 2 + 16 + y, digits);
 		DrawActorSp(actor, 48 + 8 + 106 + text_offset - (digits == 3 ? 0 : 12), i * 48 + 2 + 16 + 16 + y, digits);
+
+		y += 10;
+	}
+
+	//Multiplayer menu actors
+	//This will draw players in your multiplayer party and theirs party characters
+	for (int i = 0; i < MultiplayerCharacter::GetAllParties().size(); ++i) {
+		const Game_Actor& actor = *(MultiplayerCharacter::GetAllParties()[i]);//*(Main_Data::game_party->GetActors()[i]);
+		
+		int face_x = 0;
+		if (Player::IsRPG2k3()) {
+			if (!Feature::HasRow()) {
+				face_x = 4;
+			} else {
+				face_x = actor.GetBattleRow() == Game_Actor::RowType::RowType_back ? 8 : 0;
+			}
+		}
+		DrawActorFace(actor, face_x, (item_max+i)*48 + y);
+
+		DrawActorName(actor, 48 + 8 + text_offset, (item_max+i)*48 + 2 + y);
+		DrawActorTitle(actor, 48 + 8 + 88 + text_offset, (item_max+i)*48 + 2 + y);
+		DrawActorLevel(actor, 48 + 8 + text_offset, (item_max+i)*48 + 2 + 16 + y);
+		DrawActorState(actor, 48 + 8 + 42 + text_offset, (item_max+i)*48 + 2 + 16 + y);
+		DrawActorExp(actor, 48 + 8 + text_offset, (item_max+i)*48 + 2 + 16 + 16 + y);
+		int digits = (actor.MaxHpValue() >= 1000 || actor.MaxSpValue() >= 1000) ? 4 : 3;
+		DrawActorHp(actor, 48 + 8 + 106 + text_offset - (digits == 3 ? 0 : 12), (item_max+i) * 48 + 2 + 16 + y, digits);
+		DrawActorSp(actor, 48 + 8 + 106 + text_offset - (digits == 3 ? 0 : 12), (item_max+i) * 48 + 2 + 16 + 16 + y, digits);
 
 		y += 10;
 	}

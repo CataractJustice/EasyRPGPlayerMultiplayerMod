@@ -1,0 +1,189 @@
+#include <iostream>
+#include "connection.h"
+#include "output.h"
+#include "packets/basepacket.h"
+#include "multiplayercharacter.h"
+#include "packets/connectpacket.h"
+#include "packets/inmappacket.h"
+#include "packets/disconnectpacket.h"
+#include "datapacketshandler.h"
+
+#ifdef EMSCRIPTEN
+#include <emscripten/websocket.h>
+EMSCRIPTEN_WEBSOCKET_T emsocket;
+
+EM_BOOL onEmOpen(int eventType, const EmscriptenWebSocketOpenEvent *websocketEvent, void *userData) {
+	return EM_TRUE;
+}
+
+EM_BOOL onEmClose(int eventType, const EmscriptenWebSocketCloseEvent *websocketEvent, void *userData) {
+	emscripten_websocket_deinitialize();
+
+	return EM_TRUE;
+}
+
+
+EM_BOOL onEmMessage(int eventType, const EmscriptenWebSocketMessageEvent *websocketEvent, void *userData) {
+	onMessage(websocketEvent->data, websocketEvent->numBytes);
+	return EM_TRUE;
+}
+
+#else
+#include <queue>
+#include <mutex>
+#include <ixwebsocket/IXNetSystem.h>
+#include <ixwebsocket/IXWebSocket.h>
+#include <ixwebsocket/IXUserAgent.h>
+
+ix::WebSocket* webSocketPtr;
+std::queue<std::pair<unsigned char*, unsigned int>> packetQ;
+std::mutex packetQLock;
+#endif
+
+void onMessageAsync(unsigned char* data, unsigned int byteLength) 
+{
+	#ifndef EMSCRIPTEN
+	packetQLock.lock();
+	unsigned char* msgcopy = new unsigned char[byteLength];
+	memcpy(msgcopy, data, byteLength);
+	packetQ.push({msgcopy, byteLength});
+	packetQLock.unlock();
+	#endif
+}
+
+
+
+void Connect(std::string url, std::string game, Credentials credentials) 
+{
+	#ifdef EMSCRIPTEN
+	//create emscripten WS//
+	EmscriptenWebSocketCreateAttributes ws_attrs = {
+		url.c_str(),
+		"binary",
+		EM_TRUE
+	};
+
+	emsocket = emscripten_websocket_new(&ws_attrs);
+	emscripten_websocket_set_onopen_callback(emsocket, NULL, onEmOpen);
+	emscripten_websocket_set_onclose_callback(emsocket, NULL, onEmClose);
+	emscripten_websocket_set_onmessage_callback(emsocket, NULL, onEmMessage);
+	#else
+	ix::initNetSystem();
+	webSocketPtr = new ix::WebSocket();
+	ix::WebSocket& webSocket = *webSocketPtr;
+	webSocket.setUrl("ws://localhost:4040");
+	webSocket.setHandshakeTimeout(5);
+	webSocket.disablePerMessageDeflate();
+	Output::Debug("Multiplayer Setting WebSocket callbacks.");
+	webSocket.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg)
+	    {
+	        if (msg->type == ix::WebSocketMessageType::Message)
+	        {
+				onMessageAsync((unsigned char*)(msg->str.c_str()), msg->str.length());
+	        }
+	        else if (msg->type == ix::WebSocketMessageType::Open)
+	        {
+				Output::Debug("Multiplayer WebSocket open.");
+	        }
+	        else if (msg->type == ix::WebSocketMessageType::Error)
+	        {
+				if(msg->errorInfo.http_status)
+					Output::Warning("IXWebSocket error: {}", msg->errorInfo.reason);
+				else
+					Output::Warning("{}", "Unknow IXWebSocket error");
+	        } 
+			else if(msg->type == ix::WebSocketMessageType::Close) 
+			{
+				Output::Debug("Multiplayer WebSocket connection closed: {}.", msg->closeInfo.reason);
+			}
+	    }
+	);
+
+	Output::Debug("Multiplayer Starting WebSocket.");
+	webSocket.start();
+	#endif
+}
+
+
+void ConnectionUpdate() 
+{
+	#ifndef EMSCRIPTEN
+	while (true) 
+	{
+		std::pair<unsigned char*, unsigned int> packetPair = {0,0};
+		packetQLock.lock();
+		if(packetQ.size() == 0) 
+		{
+			packetQLock.unlock();
+			break;
+		}
+		packetPair = packetQ.front();
+		packetQ.pop();
+		packetQLock.unlock();
+
+		onMessage(packetPair.first, packetPair.second);
+		delete[] packetPair.first;
+	}
+	#endif
+}
+
+void sendMessage(unsigned char* data, unsigned int byteLength) 
+{
+	#ifdef EMSCRIPTEN
+	emscripten_websocket_send_binary(emsocket, data, byteLength);
+	#else
+	webSocketPtr->sendBinary(ix::IXWebSocketSendData((char*)data, byteLength));
+	#endif
+}
+
+void onMessage(unsigned char* data, unsigned int byteLength) 
+{	
+	std::string decmsg = "";
+	for(int i = 0; i < byteLength; i++) 
+	{
+		decmsg += std::to_string((int)data[i]) + " ";
+	}
+	Output::Debug("Multiplayer message: {}", decmsg);
+	IncomingPacket* packet = ((IncomingPacket*)data);
+	switch (packet->type)
+	{
+	case IPacketType::connect:
+	{
+		ConnectPacket* connectPacket = (ConnectPacket*)packet;
+		MultiplayerCharacter::MakeCharacter(connectPacket->id);
+	}
+		break;
+	case IPacketType::inmap: 
+	{
+		InMapPacket* inMapPacket = (InMapPacket*)packet;
+		MultiplayerCharacter::MakeCharacter(inMapPacket->id);
+	}
+	break;
+
+	case IPacketType::disconnect:
+	{
+		DisconnectPacket* disconnectPacket = (DisconnectPacket*)packet;
+		MultiplayerCharacter::RemovePlayer(disconnectPacket->id);
+	}
+	break;
+
+	case IPacketType::mdata:
+	{
+		HandleDataPacket((IDataPacket*)data);
+	}
+	break;
+	
+	case IPacketType::id: 
+	{
+		//Multiplayer to-do: save id if it ever going to be needed.
+	}
+	}
+}
+
+void ConnectionClose()
+{
+	#ifdef EMSCRIPTEN
+	#else
+	webSocketPtr->stop();
+	#endif
+}

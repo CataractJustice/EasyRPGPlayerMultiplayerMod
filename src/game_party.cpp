@@ -469,6 +469,7 @@ void Game_Party::AddActor(int actor_id) {
 		return;
 	data.party.push_back((int16_t)actor_id);
 	Main_Data::game_player->ResetGraphic();
+	
 
 	auto scene = Scene::Find(Scene::Battle);
 	if (scene) {

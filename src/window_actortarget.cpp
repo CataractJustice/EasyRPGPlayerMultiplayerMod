@@ -21,6 +21,7 @@
 #include "game_party.h"
 #include "bitmap.h"
 #include "player.h"
+#include "multiplayer/multiplayercharacter.h"
 
 Window_ActorTarget::Window_ActorTarget(int ix, int iy, int iwidth, int iheight) :
 	Window_Selectable(ix, iy, iwidth, iheight) {
@@ -39,6 +40,22 @@ void Window_ActorTarget::Refresh() {
 	for (int i = 0; i < item_max; ++i) {
 		const Game_Actor& actor = *(Main_Data::game_party->GetActors()[i]);
 
+		DrawActorFace(actor, 0, i * 48 + y);
+		DrawActorName(actor, 48 + 8, i * 48 + 2 + y);
+		DrawActorLevel(actor, 48 + 8, i * 48 + 2 + 16 + y);
+		DrawActorState(actor, 48 + 8, i * 48 + 2 + 16 + 16 + y);
+		int digits = (actor.MaxHpValue() >= 1000 || actor.MaxSpValue() >= 1000) ? 4 : 3;
+		int x_offset = 48 + 8 + 46 + (digits == 3 ? 12 : 0);
+		DrawActorHp(actor, x_offset, i * 48 + 2 + 16 + y, digits);
+		DrawActorSp(actor, x_offset, i * 48 + 2 + 16 + 16 + y, digits);
+
+		y += 10;
+	}
+
+	//Multiplayer actor targets
+	//This will draw players in your multiplayer party and theirs party characters
+	for (int i = 0; i < item_max; ++i) {
+		const Game_Actor& actor = *(MultiplayerCharacter::GetAllParties()[i]);//*(Main_Data::game_party->GetActors()[i]);
 		DrawActorFace(actor, 0, i * 48 + y);
 		DrawActorName(actor, 48 + 8, i * 48 + 2 + y);
 		DrawActorLevel(actor, 48 + 8, i * 48 + 2 + 16 + y);

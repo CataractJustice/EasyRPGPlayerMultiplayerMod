@@ -453,7 +453,52 @@ add_library(${PROJECT_NAME} OBJECT
 	src/window_varlist.cpp
 	src/window_varlist.h
 	src/external/rang.hpp
+
+	src/multiplayer/packets/spritepacket.h
+	src/multiplayer/packets/facingpacket.h
+	src/multiplayer/packets/connectpacket.h
+	src/multiplayer/packets/inmappacket.h
+	src/multiplayer/packets/datapacket.cpp
+	src/multiplayer/packets/spritebitmappacket.cpp
+	src/multiplayer/packets/spritebitmappacket.h
+	src/multiplayer/packets/spritepacket.cpp
+	src/multiplayer/packets/spritepacket.h
+	src/multiplayer/packets/movespeedpacket.cpp
+	src/multiplayer/packets/basepacket.h
+	src/multiplayer/packets/mappacket.h
+	src/multiplayer/packets/datapacket.h
+	src/multiplayer/packets/disconnectpacket.h
+	src/multiplayer/packets/positionpacket.h
+	src/multiplayer/packets/movespeedpacket.h
+	src/multiplayer/packets/facingpacket.cpp
+	src/multiplayer/packets/chatmsgpacket.cpp
+	src/multiplayer/packets/chatmsgpacket.h
+	src/multiplayer/packets/actorinfopacket.h
+	src/multiplayer/packets/actorinfopacket.cpp
+	src/multiplayer/chat.cpp
+	src/multiplayer/chat.h
+	src/multiplayer/connection.h
+	src/multiplayer/init.cpp
+	src/multiplayer/credentials.h
+	src/multiplayer/multiplayercharacter.h
+	src/multiplayer/connection.cpp
+	src/multiplayer/init.h
+	src/multiplayer/datapacketshandler.h
+	src/multiplayer/datapacketshandler.cpp
+	src/multiplayer/multiplayercharacter.cpp
+	src/multiplayer/textinput.h
+	src/multiplayer/textinput.cpp
 )
+
+# Multiplayer mod
+# IXWebsocket for standalone connection
+if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+
+else()
+	add_subdirectory(IXWebSocket)
+	target_link_libraries(${PROJECT_NAME} ixwebsocket)
+	set(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -lbrotlidec -lbrotlicommon ")
+endif()
 
 # These are actually unused when building in CMake
 #	src/platform/opendingux/opendingux_input_buttons.cpp
@@ -1106,6 +1151,8 @@ if(${PLAYER_BUILD_EXECUTABLE} AND (${PLAYER_TARGET_PLATFORM} STREQUAL "SDL2" OR 
 		endif()
 
 		target_link_libraries(${EXE_NAME} "idbfs.js")
+		# Multiplayer mod websocket connection
+		target_link_libraries(${EXE_NAME} websocket.js)
 
 		set_target_properties(${EXE_NAME} PROPERTIES OUTPUT_NAME "${PLAYER_JS_OUTPUT_NAME}")
 	endif()

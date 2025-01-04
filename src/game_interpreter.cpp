@@ -67,6 +67,12 @@
 #include "algo.h"
 #include "rand.h"
 
+//Multiplayer mod:
+#include "multiplayer/packets/soundpacket.h"
+#include "multiplayer/connection.h"
+#include "multiplayer/packets/actorinfopacket.h"
+//
+
 enum BranchSubcommand {
 	eOptionBranchElse = 1
 };
@@ -1649,6 +1655,8 @@ bool Game_Interpreter::CommandChangePartyMember(lcf::rpg::EventCommand const& co
 
 	actor = Main_Data::game_actors->GetActor(id);
 
+	//Multiplayer
+
 	if (!actor) {
 		Output::Warning("ChangePartyMember: Invalid actor ID {}", id);
 		return true;
@@ -1657,6 +1665,7 @@ bool Game_Interpreter::CommandChangePartyMember(lcf::rpg::EventCommand const& co
 	if (com.parameters[0] == 0) {
 		// Add members
 		Main_Data::game_party->AddActor(id);
+		sendPacket(OActorInfoPacket(actor, Main_Data::game_party->GetActors().size()));
 
 	} else {
 		// Remove members
@@ -2081,6 +2090,11 @@ bool Game_Interpreter::CommandPlaySound(lcf::rpg::EventCommand const& com) { // 
 	}
 
 	Main_Data::game_system->SePlay(sound, true);
+
+	//Multiplayer mod:
+	sendPacket(OSoundPacket(sound));
+	//
+
 	return true;
 }
 

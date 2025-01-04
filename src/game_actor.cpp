@@ -313,7 +313,7 @@ void Game_Actor::UnlearnAllSkills() {
 }
 
 void Game_Actor::SetFace(const std::string& file_name, int index) {
-	if (file_name == dbActor->face_name && index == dbActor->face_index) {
+	if (data.ID && file_name == dbActor->face_name && index == dbActor->face_index) {
 		data.face_name = "";
 		data.face_id = 0;
 	} else {
@@ -410,6 +410,9 @@ void Game_Actor::FullHeal() {
 }
 
 int Game_Actor::GetBaseMaxHp(bool mod) const {
+	//TODO: display correct actor stats for multiplayer
+	if(data.ID == 0) return 0;
+	//
 	int n = 0;
 	// Special handling for games that use a level of 0 -> Return 0 Hp
 	// Same applies for other stats
@@ -433,6 +436,9 @@ int Game_Actor::GetBaseMaxHp() const {
 }
 
 int Game_Actor::GetBaseMaxSp(bool mod) const {
+	//TODO: display correct actor stats for multiplayer
+	if(data.ID == 0) return 0;
+	//
 	int n = 0;
 	if (GetLevel() > 0) {
 		n = data.class_id > 0
@@ -660,7 +666,12 @@ int Game_Actor::GetNextExp(int level) const {
 	} else if (level == 0) {
 		return 0;
 	} else {
+		//There is a multiplayer fix
+		//TODO: make sure that next level is displayed correctly for coop party
+		if(level <= exp_list.size())
 		return exp_list[level];
+		else
+		return 1000;
 	}
 }
 
@@ -739,7 +750,7 @@ int Game_Actor::GetMaxLevel() const {
 	if (lcf::Data::system.easyrpg_max_level > -1) {
 		max_level = lcf::Data::system.easyrpg_max_level;
 	}
-	return Utils::Clamp<int32_t>(max_level, 1, dbActor->final_level);
+	return Utils::Clamp<int32_t>(max_level, 1, data.ID ? dbActor->final_level : 99);
 }
 
 void Game_Actor::SetExp(int _exp) {
@@ -902,9 +913,10 @@ StringView Game_Actor::GetSkillName() const {
 }
 
 void Game_Actor::SetSprite(const std::string &file, int index, bool transparent) {
-	if (file == dbActor->character_name
+	if (data.ID && file == dbActor->character_name
 			&& index == dbActor->character_index
-			&& transparent == dbActor->transparent) {
+			&& transparent == dbActor->transparent
+			) {
 		data.sprite_name = "";
 		data.sprite_id = 0;
 		data.transparency = 0;

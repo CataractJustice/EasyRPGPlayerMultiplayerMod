@@ -41,6 +41,9 @@
 #include "bitmap.h"
 #include "lcf/scope_guard.h"
 
+//Multiplayer:
+#include "multiplayer/chat.h"
+
 #ifdef SUPPORT_AUDIO
 #  include "audio.h"
 
@@ -195,10 +198,11 @@ Sdl2Ui::~Sdl2Ui() {
 }
 
 bool Sdl2Ui::vChangeDisplaySurfaceResolution(int new_width, int new_height) {
+	new_width += CHAT_WIDTH;
 	SDL_Texture* new_sdl_texture_game = SDL_CreateTexture(sdl_renderer,
 		texture_format,
 		SDL_TEXTUREACCESS_STREAMING,
-		new_width, new_height);
+		new_width * current_display_mode.zoom, new_height * current_display_mode.zoom);
 
 	if (!new_sdl_texture_game) {
 		Output::Warning("ChangeDisplaySurfaceResolution SDL_CreateTexture failed: {}", SDL_GetError());
@@ -219,6 +223,15 @@ bool Sdl2Ui::vChangeDisplaySurfaceResolution(int new_width, int new_height) {
 	}
 
 	main_surface = new_main_surface;
+
+	BitmapRef new_display_surface = Bitmap::Create(new_width * current_display_mode.zoom, new_height * current_display_mode.zoom, Color(0, 0, 0, 255));
+
+	if (!new_display_surface) {
+		Output::Warning("ChangeDisplaySurfaceResolution Bitmap::Create failed");
+		return false;
+	}
+
+	display_surface = new_display_surface;
 	window.size_changed = true;
 
 	BeginDisplayModeChange();
@@ -236,7 +249,9 @@ void Sdl2Ui::RequestVideoMode(int width, int height, int zoom, bool fullscreen, 
 
 	// SDL2 documentation says that resolution dependent code should not be used
 	// anymore. The library takes care of it now.
-	current_display_mode.width = width;
+	//current_display_mode.width = width;
+	//Multiplayer
+	current_display_mode.width = width + CHAT_WIDTH;
 	current_display_mode.height = height;
 	current_display_mode.bpp = 32;
 	current_display_mode.zoom = zoom;
@@ -400,7 +415,8 @@ bool Sdl2Ui::RefreshDisplayMode() {
 		sdl_texture_game = SDL_CreateTexture(sdl_renderer,
 			texture_format,
 			SDL_TEXTUREACCESS_STREAMING,
-			display_width, display_height);
+			//Multiplayer
+			display_width * current_display_mode.zoom, display_height  * current_display_mode.zoom);
 
 		if (!sdl_texture_game) {
 			Output::Debug("SDL_CreateTexture failed : {}", SDL_GetError());
@@ -446,6 +462,8 @@ bool Sdl2Ui::RefreshDisplayMode() {
 		// Drawing surface will be the window itself
 		main_surface = Bitmap::Create(
 			display_width, display_height, Color(0, 0, 0, 255));
+		//Multiplayer, fullres surface
+		display_surface = Bitmap::Create((SCREEN_TARGET_WIDTH + CHAT_WIDTH)* current_display_mode.zoom, (SCREEN_TARGET_HEIGHT) * current_display_mode.zoom, Color(0, 0, 0, 255));
 	}
 
 	return true;
@@ -539,9 +557,15 @@ void Sdl2Ui::ToggleVsync() {
 #endif
 }
 
+void FullresDrawPass(BitmapRef& display_surface, int zoom);
+
 void Sdl2Ui::UpdateDisplay() {
 	// SDL_UpdateTexture was found to be faster than SDL_LockTexture / SDL_UnlockTexture.
-	SDL_UpdateTexture(sdl_texture_game, nullptr, main_surface->pixels(), main_surface->pitch());
+	//SDL_UpdateTexture(sdl_texture_game, nullptr, main_surface->pixels(), main_surface->pitch());
+	//Multiplayer
+	GetFullresSurface()->Blit2x(GetFullresSurface()->GetRect(), *GetDisplaySurface(), GetDisplaySurface()->GetRect());
+	FullresDrawPass(GetFullresSurface(), current_display_mode.zoom);
+	SDL_UpdateTexture(sdl_texture_game, nullptr, display_surface->pixels(), display_surface->pitch());
 
 	if (window.size_changed && window.width > 0 && window.height > 0) {
 		// Based on SDL2 function UpdateLogicalSize
@@ -659,9 +683,24 @@ void Sdl2Ui::ProcessEvent(SDL_Event &evnt) {
 		case SDL_QUIT:
 			Player::exit_flag = true;
 			return;
-
+		case SDL_TEXTINPUT:
+			if(Chat::HasInstance())
+				if(Chat::Instance().GetFocus())
+					Chat::Instance().ProcessTextInput(evnt);
+			return;
 		case SDL_KEYDOWN:
-			ProcessKeyDownEvent(evnt);
+			if(evnt.key.keysym.sym == SDLK_TAB && Chat::HasInstance()) 
+			{
+				Chat::Instance().SetFocus(!Chat::Instance().GetFocus());
+			}
+			if(Chat::HasInstance() && Chat::Instance().GetFocus()) 
+			{
+				Chat::Instance().ProcessKeyDown(evnt);
+			} 
+			else 
+			{
+				ProcessKeyDownEvent(evnt);
+			}
 			return;
 
 		case SDL_KEYUP:

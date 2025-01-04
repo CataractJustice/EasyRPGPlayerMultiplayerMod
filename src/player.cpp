@@ -83,6 +83,9 @@
 #include "game_clock.h"
 #include "message_overlay.h"
 
+//Multiplayer
+#include "multiplayer/init.h"
+
 #ifdef __ANDROID__
 #include "platform/android/android.h"
 #endif
@@ -208,6 +211,8 @@ void Player::Run() {
 	reset_flag = false;
 
 	Game_Clock::ResetFrame(Game_Clock::now());
+	//Multiplayer
+	MultiplayerStart();	
 
 	// Main loop
 	// libretro invokes the MainLoop through a retro_run-callback

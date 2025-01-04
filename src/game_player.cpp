@@ -43,6 +43,11 @@
 #include <cmath>
 #include "scene_gameover.h"
 
+//Multiplayer mod:
+#include "multiplayer/connection.h"
+#include "multiplayer/packets/positionpacket.h"
+#include "multiplayer/packets/facingpacket.h"
+
 Game_Player::Game_Player(): Game_PlayerBase(Player)
 {
 	SetDirection(lcf::rpg::EventPage::Direction_down);
@@ -613,6 +618,12 @@ Game_Vehicle* Game_Player::GetVehicle() const {
 }
 
 bool Game_Player::Move(int dir) {
+
+	//Multiplayer mod:
+	int oldX = GetX();
+	int oldY = GetY();
+	//
+
 	if (!IsStopping()) {
 		return true;
 	}
@@ -663,6 +674,12 @@ bool Game_Player::Move(int dir) {
 		Main_Data::game_screen->FlashMapStepDamage();
 	}
 
+	//Multiplayer mod:
+	if(oldX != GetX() || oldY != GetY()) 
+	{
+		sendPacket(OPositionPacket(GetX(), GetY()));
+	}
+	//
 	return true;
 }
 

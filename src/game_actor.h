@@ -949,24 +949,26 @@ inline Game_Battler::BattlerType Game_Actor::GetType() const {
 }
 
 inline void Game_Actor::SetName(const std::string &new_name) {
-	data.name = (new_name != dbActor->name)
+	data.name = (data.ID && new_name != dbActor->name)
 		? new_name
 		: lcf::rpg::SaveActor::kEmptyName;
 }
 
 inline StringView Game_Actor::GetName() const {
+	if(data.ID == 0) return data.name;
 	return data.name != lcf::rpg::SaveActor::kEmptyName
 		? StringView(data.name)
 		: StringView(dbActor->name);
 }
 
 inline void Game_Actor::SetTitle(const std::string &new_title) {
-	data.title = (new_title != dbActor->title)
+	data.title = (data.ID && new_title != dbActor->title)
 		? new_title
 		: lcf::rpg::SaveActor::kEmptyName;
 }
 
 inline StringView Game_Actor::GetTitle() const {
+	if(data.ID == 0) return data.title;
 	return data.title != lcf::rpg::SaveActor::kEmptyName
 		? StringView(data.title)
 		: StringView(dbActor->title);
@@ -997,7 +999,7 @@ inline StringView Game_Actor::GetFaceName() const {
 }
 
 inline int Game_Actor::GetFaceIndex() const {
-	return (!data.face_name.empty())
+	return (!data.face_name.empty() || data.ID == 0)
 		? data.face_id
 		: dbActor->face_index;
 }

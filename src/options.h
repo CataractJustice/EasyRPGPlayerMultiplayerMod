@@ -34,6 +34,7 @@
 
 /** Targeted screen default width. */
 #define SCREEN_TARGET_WIDTH 320
+#define CHAT_WIDTH 160
 
 /** Targeted screen default height. */
 #define SCREEN_TARGET_HEIGHT 240

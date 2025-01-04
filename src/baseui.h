@@ -169,6 +169,8 @@ public:
 	BitmapRef const& GetDisplaySurface() const;
 	BitmapRef& GetDisplaySurface();
 
+	BitmapRef& GetFullresSurface();
+
 	/**
 	 * Requests a resolution change of the framebuffer.
 	 *
@@ -276,6 +278,9 @@ protected:
 	/** Surface used for zoom. */
 	BitmapRef main_surface;
 
+	/** Surface used to draw in full res*/
+	BitmapRef display_surface;
+
 	/** Mouse position on screen relative to the window. */
 	Point mouse_pos;
 
@@ -337,6 +342,10 @@ inline BitmapRef const& BaseUi::GetDisplaySurface() const {
 
 inline BitmapRef& BaseUi::GetDisplaySurface() {
 	return main_surface;
+}
+
+inline BitmapRef& BaseUi::GetFullresSurface() {
+	return display_surface;
 }
 
 inline bool BaseUi::vChangeDisplaySurfaceResolution(int new_width, int new_height) {

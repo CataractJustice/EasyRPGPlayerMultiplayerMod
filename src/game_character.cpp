@@ -34,6 +34,16 @@
 #include <cmath>
 #include <cassert>
 
+//Multiplayer mod:
+#include "multiplayer/connection.h"
+#include "multiplayer/packets/spritepacket.h"
+#include "multiplayer/packets/facingpacket.h"
+#include "multiplayer/packets/movespeedpacket.h"
+#include "multiplayer/packets/jumppacket.h"
+#include "multiplayer/packets/flashpacket.h"
+#include "multiplayer/packets/hidespritepacket.h"
+#include "multiplayer/packets/transparencypacket.h"
+
 Game_Character::Game_Character(Type type, lcf::rpg::SaveMapEventBase* d) :
 	_type(type), _data(d)
 {
@@ -223,7 +233,17 @@ void Game_Character::UpdateAnimation() {
 	}
 }
 
+int previousFlashUpdateTimeLeft = 0;
 void Game_Character::UpdateFlash() {
+	if(GetType() == Player) 
+	{
+		if(data()->flash_time_left < previousFlashUpdateTimeLeft) 
+		{
+			//"stop flash" packet
+			sendPacket(OFlashPacket(0,0,0,0,0));
+		}
+		previousFlashUpdateTimeLeft = data()->flash_time_left;
+	}
 	Flash::Update(data()->flash_current_level, data()->flash_time_left);
 }
 
@@ -721,6 +741,9 @@ bool Game_Character::Jump(int x, int y) {
 	SetJumping(true);
 	SetRemainingStep(SCREEN_TILE_SIZE);
 
+	//Multiplayer
+	if(GetType() == Player) sendPacket(OJumpPacket(x, y));
+
 	return true;
 }
 
@@ -849,11 +872,25 @@ int Game_Character::GetBushDepth() const {
 }
 
 void Game_Character::Flash(int r, int g, int b, int power, int frames) {
+	static int lastR = 0;
+	static int lastG = 0;
+	static int lastB = 0;
+	static int lastP = 0;
 	data()->flash_red = r;
 	data()->flash_green = g;
 	data()->flash_blue = b;
 	data()->flash_current_level = power;
 	data()->flash_time_left = frames;
+	if(GetType() == Player && (previousFlashUpdateTimeLeft != frames || lastR != r || lastG != g || lastB != b || lastP != power)) 
+		sendPacket(OFlashPacket(r, g, b, power, frames));
+
+	if(GetType() == Player) 
+	{
+		lastR = r;
+		lastG = g;
+		lastB = b;
+		lastP = power;
+	}
 }
 
 // Gets Character
@@ -915,5 +952,41 @@ void Game_Character::UpdateFacing() {
 		}
 	} else {
 		SetFacing(dir);
+	}
+}
+
+//Multiplayer
+void Game_Character::SetMoveSpeed(int speed) {
+	if(data()->move_speed != speed)
+		if(GetType() == Player) sendPacket(OMoveSpeedPacket(speed));
+	data()->move_speed = speed;
+}
+
+void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
+	if(data()->sprite_id != index || data()->sprite_name != sprite_name)
+		if(GetType() == Player) sendPacket(OSpritePacket(sprite_name, index));
+	data()->sprite_name = std::move(sprite_name);
+	data()->sprite_id = index;
+}
+
+void Game_Character::SetFacing(int new_direction) {
+	if(new_direction != data()->facing)
+		if(GetType() == Player) sendPacket(OFacingPacket(new_direction));
+	data()->facing = new_direction;
+}
+
+void Game_Character::SetSpriteHidden(bool hidden) {
+	data()->sprite_hidden = hidden;
+	if(GetType() == Player) 
+	{
+		sendPacket(OHideSpritePacket(hidden));
+	}
+}
+
+void Game_Character::SetTransparency(int value) {
+	data()->transparency = Utils::Clamp(value, 0, 7);
+	if(GetType() == Player) 
+	{
+		sendPacket(OTransparencyPacket(value));
 	}
 }

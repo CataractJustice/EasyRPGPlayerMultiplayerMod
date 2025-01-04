@@ -54,6 +54,10 @@
 #include "scene_gameover.h"
 #include "feature.h"
 
+//Multiplayer
+#include "multiplayer/init.h"
+#include "multiplayer/multiplayercharacter.h"
+
 namespace {
 	// Intended bad value, Game_Map::Init sets them correctly
 	int screen_width = -1;
@@ -132,6 +136,9 @@ void Game_Map::Dispose() {
 	map.reset();
 	map_info = {};
 	panorama = {};
+	//Multiplayer mod:
+	MultiplayerCharacter::OnMapDispose();
+	//
 }
 
 void Game_Map::Quit() {
@@ -326,6 +333,9 @@ std::unique_ptr<lcf::rpg::Map> Game_Map::loadMapFile(int map_id) {
 	if (map.get() == NULL) {
 		Output::ErrorStr(lcf::LcfReader::GetError());
 	}
+
+	//Multiplayer mod:
+	ChangeMap(map_id);
 
 	return map;
 }
@@ -977,6 +987,8 @@ void Game_Map::Update(MapUpdateAsyncContext& actx, bool is_preupdate) {
 	}
 
 	if (!actx.IsActive()) {
+		//Multiplayer mod:
+		MultiplayerUpdate();
 		//If not resuming from async op ...
 		Main_Data::game_player->Update();
 
@@ -1008,6 +1020,7 @@ void Game_Map::Update(MapUpdateAsyncContext& actx, bool is_preupdate) {
 	}
 
 	Parallax::Update();
+
 
 	actx = {};
 }
