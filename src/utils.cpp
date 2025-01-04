@@ -377,6 +377,36 @@ Utils::UtfNextResult Utils::UTF8Next(const char* iter, const char* const end) {
 	return { iter, 0 };
 }
 
+Utils::UtfNextResult Utils::UTF8Skip(const char* iter, const char* end, int skip) {
+	UtfNextResult ret;
+
+	if (skip == 0) {
+		ret = UTF8Next(iter, end);
+		return { iter, ret.ch };
+	}
+
+	for (int i = skip; iter < end && skip > 0; --skip) {
+		ret = UTF8Next(iter, end);
+		iter = ret.next;
+	}
+
+	return ret;
+}
+
+int Utils::UTF8Length(StringView str) {
+	size_t len = 0;
+
+	const char* iter = str.data();
+	const char* const e = str.data() + str.size();
+	while (iter < e) {
+		auto ret = Utils::UTF8Next(iter, e);
+		iter = ret.next;
+		++len;
+	}
+
+	return len;
+}
+
 Utils::ExFontRet Utils::ExFontNext(const char* iter, const char* end) {
 	ExFontRet ret;
 	if (end - iter >= 2 && *iter == '$') {
@@ -424,8 +454,7 @@ Utils::TextRet Utils::TextNext(const char* iter, const char* end, char32_t escap
 	return ret;
 }
 
-#if _WIN32
-
+// Please report an issue when you get a compile error here because your toolchain is broken and lacks wchar_t
 template<size_t WideSize>
 static std::wstring ToWideStringImpl(StringView);
 #if __SIZEOF_WCHAR_T__ == 4 || __WCHAR_MAX__ > 0x10000
@@ -464,52 +493,41 @@ std::string Utils::FromWideString(const std::wstring& str) {
 	return FromWideStringImpl<sizeof(wchar_t)>(str);
 }
 
-#endif
-
 int Utils::PositiveModulo(int i, int m) {
 	return (i % m + m) % m;
 }
 
-bool Utils::IsBigEndian() {
-	union {
-		uint32_t i;
-		char c[4];
-	} d = {0x01020304};
-
-	return d.c[0] == 1;
-}
-
 void Utils::SwapByteOrder(uint16_t& us) {
-	if (!IsBigEndian()) {
-		return;
-	}
-
+#ifdef WORDS_BIGENDIAN
 	us =	(us >> 8) |
 			(us << 8);
+#else
+	(void)us;
+#endif
 }
 
 void Utils::SwapByteOrder(uint32_t& ui) {
-	if (!IsBigEndian()) {
-		return;
-	}
-
+#ifdef WORDS_BIGENDIAN
 	ui =	(ui >> 24) |
 			((ui<<8) & 0x00FF0000) |
 			((ui>>8) & 0x0000FF00) |
 			(ui << 24);
+#else
+	(void)ui;
+#endif
 }
 
 void Utils::SwapByteOrder(double& d) {
-	if (!IsBigEndian()) {
-		return;
-	}
-
+#ifdef WORDS_BIGENDIAN
 	uint32_t *p = reinterpret_cast<uint32_t *>(&d);
 	SwapByteOrder(p[0]);
 	SwapByteOrder(p[1]);
 	uint32_t tmp = p[0];
 	p[0] = p[1];
 	p[1] = tmp;
+#else
+	(void)d;
+#endif
 }
 
 // based on https://stackoverflow.com/questions/6089231/
@@ -592,6 +610,10 @@ uint32_t Utils::CRC32(std::istream& stream) {
 
 // via https://stackoverflow.com/q/3418231/
 std::string Utils::ReplaceAll(std::string str, const std::string& search, const std::string& replace) {
+	if (search.empty()) {
+		return str;
+	}
+
 	size_t start_pos = 0;
 	while((start_pos = str.find(search, start_pos)) != std::string::npos) {
 		str.replace(start_pos, search.length(), replace);

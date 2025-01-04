@@ -73,7 +73,7 @@ void Scene_Battle_Rpg2k::CreateUi() {
 		}
 	}
 
-	SetCommandWindows(Player::menu_offset_x);
+	SetCommandWindowsX();
 
 	ResetWindows(true);
 	battle_message_window->SetVisible(true);
@@ -136,9 +136,8 @@ void Scene_Battle_Rpg2k::CreateBattleCommandWindow() {
 		ToString(lcf::Data::terms.command_item)
 	};
 
-	command_window.reset(new Window_Command(std::move(commands), 76));
+	command_window.reset(new Window_Command(std::move(commands), option_command_mov));
 	command_window->SetHeight(80);
-	command_window->SetX(Player::screen_width - Player::menu_offset_x - option_command_mov);
 	command_window->SetY(Player::screen_height - Player::menu_offset_y - 80);
 }
 
@@ -203,6 +202,12 @@ void Scene_Battle_Rpg2k::vUpdate() {
 		}
 
 		if (Game_Message::IsMessageActive() || Game_Battle::GetInterpreter().IsRunning()) {
+			break;
+		}
+
+		// this is checked separately because we want normal events to be processed
+		// just not sub-events called by maniacs battle hooks.
+		if (state != State_Victory && state != State_Defeat && Game_Battle::ManiacProcessSubEvents()) {
 			break;
 		}
 
@@ -395,7 +400,12 @@ void Scene_Battle_Rpg2k::ResetWindows(bool make_invisible) {
 	help_window->SetVisible(false);
 }
 
-void Scene_Battle_Rpg2k::SetCommandWindows(int x) {
+void Scene_Battle_Rpg2k::SetCommandWindowsX() {
+	int x = Player::menu_offset_x;
+	if (Player::screen_width >= battle_menu_offset_x) {
+		x = std::max<int>((Player::screen_width - battle_menu_offset_x) / 2, 0);
+	}
+
 	options_window->SetX(x);
 	x += options_window->GetWidth();
 	status_window->SetX(x);
@@ -404,6 +414,11 @@ void Scene_Battle_Rpg2k::SetCommandWindows(int x) {
 }
 
 void Scene_Battle_Rpg2k::MoveCommandWindows(int x, int frames) {
+	if (Player::screen_width >= battle_menu_offset_x) {
+		// Do not animate as they fit on the screen in widescreen mode
+		return;
+	}
+
 	options_window->InitMovement(options_window->GetX(), options_window->GetY(),
 			x, options_window->GetY(), frames);
 
@@ -457,7 +472,7 @@ Scene_Battle_Rpg2k::SceneActionReturn Scene_Battle_Rpg2k::ProcessSceneActionFigh
 		if (previous_state == State_SelectCommand) {
 			MoveCommandWindows(Player::menu_offset_x, 8);
 		} else {
-			SetCommandWindows(Player::menu_offset_x);
+			SetCommandWindowsX();
 		}
 		SetSceneActionSubState(eWaitForInput);
 		// Prevent that DECISION from a closed message triggers a battle option in eWaitForInput
@@ -642,7 +657,7 @@ Scene_Battle_Rpg2k::SceneActionReturn Scene_Battle_Rpg2k::ProcessSceneActionSkil
 		ResetWindows(true);
 
 		skill_window->SetActive(true);
-		skill_window->SetActor(active_actor->GetId());
+		skill_window->SetActor(*active_actor);
 		if (previous_state == State_SelectCommand) {
 			skill_window->RestoreActorIndex(actor_index - 1);
 		}
@@ -835,7 +850,7 @@ Scene_Battle_Rpg2k::SceneActionReturn Scene_Battle_Rpg2k::ProcessSceneActionVict
 		std::vector<int> drops;
 		Main_Data::game_enemyparty->GenerateDrops(drops);
 
-		auto pm = PendingMessage();
+		PendingMessage pm(Game_Message::CommandCodeInserter);
 		pm.SetEnableFace(false);
 
 		pm.SetWordWrapped(Feature::HasPlaceholders());
@@ -892,7 +907,7 @@ Scene_Battle_Rpg2k::SceneActionReturn Scene_Battle_Rpg2k::ProcessSceneActionDefe
 		Main_Data::game_system->SetMessagePosition(2);
 		Main_Data::game_system->SetMessageTransparent(false);
 
-		auto pm = PendingMessage();
+		PendingMessage pm(Game_Message::CommandCodeInserter);
 		pm.SetEnableFace(false);
 
 		pm.SetWordWrapped(Feature::HasPlaceholders());
@@ -1819,6 +1834,10 @@ void Scene_Battle_Rpg2k::CreateEnemyActions() {
 	}
 
 	for (auto* enemy : Main_Data::game_enemyparty->GetEnemies()) {
+		if (enemy->IsHidden()) {
+			continue;
+		}
+
 		if (!EnemyAi::SetStateRestrictedAction(*enemy)) {
 			if (enemy->GetEnemyAi() == -1) {
 				enemyai_algos[default_enemyai_algo]->SetEnemyAiAction(*enemy);

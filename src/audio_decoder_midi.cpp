@@ -17,6 +17,7 @@
 
 #include <array>
 #include <algorithm>
+#include "audio.h"
 #include "audio_decoder_midi.h"
 #include "midisequencer.h"
 #include "output.h"
@@ -37,11 +38,15 @@ constexpr int sample_divider = 1;
 #endif
 constexpr int samples_per_play = 64 / sample_divider;
 
-static const uint8_t midi_event_control_change = 0b1011;
-static const uint8_t midi_control_volume = 7;
-static const uint8_t midi_control_all_sound_off = 120;
-//static const uint8_t midi_control_all_note_off = 123;
-static const uint8_t midi_control_reset_all_controller = 121;
+static const uint8_t midi_set_reg_param_upper = 0x6;
+static const uint8_t midi_control_volume = 0x7;
+static const uint8_t midi_event_control_change = 0xB;
+static const uint8_t midi_set_reg_param_lower = 0x26;
+static const uint8_t midi_control_all_sound_off = 0x78;
+static const uint8_t midi_control_reset_all_controller = 0x79;
+//static const uint8_t midi_control_all_note_off = 0x7B;
+static const uint8_t midi_set_reg_param_number_lower = 0x64;
+static const uint8_t midi_set_reg_param_number_upper = 0x65;
 
 static uint32_t midimsg_make(uint8_t event_type, uint8_t channel, uint8_t value1, uint8_t value2) {
 	uint32_t msg = 0;
@@ -83,6 +88,28 @@ static inline uint8_t midimsg_get_value2(uint32_t msg) {
 	return (msg & 0xFF0000) >> 16;
 }
 
+static bool midimsg_validate(uint32_t msg) {
+	// Do some very basic sanity checks on the messages as
+	// invalid messages can cause the underlying MIDI synth to crash.
+	uint8_t event_type = midimsg_get_event_type(msg);
+	//uint8_t channel = midimsg_get_channel(msg);
+	uint8_t value1 = midimsg_get_value1(msg);
+	//uint8_t value2 = midimsg_get_value2(msg);
+
+	if (event_type < 64 ||
+		(event_type >= 70 && event_type < 84) ||
+		(event_type == 88) ||
+		(event_type >= 91 && event_type < 96) ||
+		(event_type >= 98 && event_type < 102))
+	{
+		if (value1 >= 128) {
+			// These event types must have a value of 0-127
+			return false;
+		}
+	}
+	return true;
+}
+
 AudioDecoderMidi::AudioDecoderMidi(std::unique_ptr<MidiDecoder> mididec)
 	: mididec(std::move(mididec)) {
 	seq = std::make_unique<midisequencer::sequencer>();
@@ -116,10 +143,11 @@ bool AudioDecoderMidi::Open(Filesystem_Stream::InputStream stream) {
 		error_message = "Midi: Error reading file";
 		return false;
 	}
+
 	seq->rewind();
+	tempo.clear();
 	tempo.emplace_back(this, midi_default_tempo);
 	mtime = seq->get_start_skipping_silence();
-	seq->play(mtime, this);
 
 	if (!mididec->SupportsMidiMessages()) {
 		if (!mididec->Open(file_buffer)) {
@@ -144,7 +172,7 @@ void AudioDecoderMidi::Pause() {
 void AudioDecoderMidi::Resume() {
 	paused = false;
 	for (int i = 0; i < 16; i++) {
-		uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume));
+		uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume * global_volume));
 		mididec->SendMidiMessage(msg);
 	}
 }
@@ -165,7 +193,7 @@ void AudioDecoderMidi::SetVolume(int new_volume) {
 
 	volume = static_cast<float>(new_volume) / 100.0f;
 	for (int i = 0; i < 16; i++) {
-		uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume));
+		uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume * global_volume));
 		mididec->SendMidiMessage(msg);
 	}
 
@@ -223,13 +251,13 @@ void AudioDecoderMidi::Update(std::chrono::microseconds delta) {
 	if (paused) {
 		return;
 	}
-	if (fade_steps >= 0 && mtime - last_fade_mtime > 0.1s) {
+	if (fade_steps > 0 && mtime - last_fade_mtime > 0.1s) {
 		volume = Utils::Clamp<float>(volume + delta_volume_step, 0.0f, 1.0f);
 		if (!mididec->SupportsMidiMessages()) {
 			log_volume = AdjustVolume(volume * 100.0f);
 		}
 		for (int i = 0; i < 16; i++) {
-			uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume));
+			uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume * global_volume));
 			mididec->SendMidiMessage(msg);
 		}
 		last_fade_mtime = mtime;
@@ -238,12 +266,24 @@ void AudioDecoderMidi::Update(std::chrono::microseconds delta) {
 }
 
 void AudioDecoderMidi::UpdateMidi(std::chrono::microseconds delta) {
+	// Only called when MidiOut is used
+
 	if (paused) {
 		return;
 	}
 
 	mtime += std::chrono::microseconds(static_cast<int>(delta.count() * pitch / 100));
+
+	if (Audio().BGM_GetGlobalVolume() / 100.0f != global_volume) {
+		global_volume = Audio().BGM_GetGlobalVolume() / 100.0f;
+		for (int i = 0; i < 16; i++) {
+			uint32_t msg = midimsg_volume(i, static_cast<uint8_t>(channel_volumes[i] * volume * global_volume));
+			mididec->SendMidiMessage(msg);
+		}
+	}
+
 	Update(delta);
+
 	seq->play(mtime, this);
 
 	if (IsFinished() && looping) {
@@ -281,6 +321,9 @@ int AudioDecoderMidi::GetTicks() const {
 }
 
 void AudioDecoderMidi::Reset() {
+	// Placed here to avoid reloading of a soundfont on shutdown
+	mididec->OnNewMidi();
+
 	// Generate a MIDI reset event so the device doesn't
 	// leave notes playing or keeps any state
 	reset();
@@ -350,9 +393,11 @@ void AudioDecoderMidi::midi_message(int, uint_least32_t message) {
 		// Adjust channel volume
 		channel_volumes[channel] = value2;
 		// Send the modified volume to midiout
-		message = midimsg_volume(channel, static_cast<uint8_t>(value2 * volume));
+		message = midimsg_volume(channel, static_cast<uint8_t>(value2 * volume * global_volume));
 	}
-	mididec->SendMidiMessage(message);
+	if (midimsg_validate(message)) {
+		mididec->SendMidiMessage(message);
+	}
 }
 
 void AudioDecoderMidi::sysex_message(int, const void* data, std::size_t size) {
@@ -373,12 +418,31 @@ void AudioDecoderMidi::meta_event(int event, const void* data, std::size_t size)
 
 void AudioDecoderMidi::reset() {
 	// MIDI reset event
-	SendMessageToAllChannels(midimsg_all_sound_off(0));
 	SendMessageToAllChannels(midimsg_reset_all_controller(0));
 
 	// GM system on (resets most parameters)
-	const unsigned char gm_reset[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+	const unsigned char gm_reset[] = { 0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7 };
 	mididec->SendSysExMessage(gm_reset, sizeof(gm_reset));
+
+	// SoundOff every channel: only necessary for synths like macOS which tend to get stuck
+	if (mididec->NeedsSoftReset()) {
+		SendMessageToAllChannels(midimsg_all_sound_off(0));
+	}
+
+	// Set the Pitch bend range to 256
+	for (int channel = 0; channel < 16; channel++) {
+		auto midi_msg = midimsg_make(midi_event_control_change, channel, midi_set_reg_param_number_upper, 0);
+		mididec->SendMidiMessage(midi_msg);
+
+		midi_msg = midimsg_make(midi_event_control_change, channel, midi_set_reg_param_number_lower, 0);
+		mididec->SendMidiMessage(midi_msg);
+
+		midi_msg = midimsg_make(midi_event_control_change, channel, midi_set_reg_param_upper, 2);
+		mididec->SendMidiMessage(midi_msg);
+
+		midi_msg = midimsg_make(midi_event_control_change, channel, midi_set_reg_param_lower, 0);
+		mididec->SendMidiMessage(midi_msg);
+	}
 }
 
 void AudioDecoderMidi::reset_tempos_after_loop() {

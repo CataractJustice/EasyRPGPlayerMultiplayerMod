@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.util.Base64;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.documentfile.provider.DocumentFile;
@@ -15,163 +16,224 @@ import java.io.ByteArrayOutputStream;
 
 public class Game implements Comparable<Game> {
     final static char escapeCode = '\u0001';
-	private final String title;
+    final static String cacheVersion = "1";
+    /** The title shown in the Game Browser */
+    private String title;
+    /** Bytes of the title string in an unspecified encoding */
+    private byte[] titleRaw = null;
+    /** Human readable version of the game directory. Shown in the game browser
+     *  when the specific setting is enabled.
+     */
+    private String gameFolderName;
+    /** Path to the game folder (forwarded via --project-path */
     private final String gameFolderPath;
-    private String savePath;
-	private boolean isFavorite;
-    private final DocumentFile gameFolder;
-    private Bitmap titleScreen;
-    /** Path to the game folder inside of the zip */
-    private String zipInnerPath;
+    /** Relative path to the save directory, made absolute by launchGame (forwarded via --save-path) */
+    private String savePath = "";
+    /** Whether the game was tagged as a favourite */
+    private boolean isFavorite;
+    /** Title image shown in the Game Browser */
+    private Bitmap titleScreen = null;
+    /** Game is launched from the APK via standalone mode */
+    private boolean standalone = false;
 
-	private Game(DocumentFile gameFolder) {
-		this.gameFolder = gameFolder;
-	    this.title = gameFolder.getName();
-        Uri folderURI = gameFolder.getUri();
-	    this.gameFolderPath = folderURI.toString();
-        this.savePath = gameFolderPath;
+    public Game(String gameFolderPath, String saveFolder, byte[] titleScreen) {
+        this.gameFolderPath = gameFolderPath;
+
+        // is only relative here, launchGame will put this in the "saves" directory
+        if (!saveFolder.isEmpty()) {
+            savePath = saveFolder;
+        }
+
+        if (titleScreen != null) {
+            this.titleScreen = BitmapFactory.decodeByteArray(titleScreen, 0, titleScreen.length);
+        };
 
         this.isFavorite = isFavoriteFromSettings();
-	}
-
-	public Game(DocumentFile gameFolder, Bitmap titleScreen) {
-	    this(gameFolder);
-        this.titleScreen = titleScreen;
     }
 
-    /**
-     * Constructor for standalone mode
-     *
-     * @param gameFolder
-     * @param saveFolder
-     */
-    public Game(String gameFolder, String saveFolder) {
-        this.title = "Standalone";
-        this.gameFolderPath = gameFolder;
-        this.savePath = saveFolder;
-        this.gameFolder = null;
-        this.isFavorite = false;
-    }
-
-    private Game(DocumentFile gameFolder, String pathInZip, Bitmap titleScreen) {
-        this(gameFolder, titleScreen);
-        zipInnerPath = pathInZip;
-    }
-
-    public static Game fromZip(DocumentFile gameFolder, String pathInZip, String saveFolder, Bitmap titleScreen) {
-        Game game = new Game(gameFolder, pathInZip, titleScreen);
-        // is only relative here, launchGame will put this in the "saves" directory
-        game.setSavePath(saveFolder);
-        return game;
-    }
-
-    public static Game fromCacheEntry(Context context, String cache) {
-        String[] entries = cache.split(String.valueOf(escapeCode));
-
-        if (entries.length != 5) {
-            return null;
+    public String getDisplayTitle() {
+        String customTitle = getCustomTitle();
+        if (!customTitle.isEmpty()) {
+            return customTitle;
         }
 
-        String savePath = entries[0];
-        DocumentFile gameFolder = DocumentFile.fromTreeUri(context, Uri.parse(entries[1]));
-        if (gameFolder == null) {
-            return null;
-        }
-
-        boolean isZip = Boolean.parseBoolean(entries[2]);
-        String zipInnerPath = null;
-
-        if (isZip) {
-            zipInnerPath = entries[3];
-        }
-
-        Bitmap titleScreen = null;
-        if (!entries[4].equals("null")) {
-            byte[] decodedByte = Base64.decode(entries[4], 0);
-            titleScreen = BitmapFactory.decodeByteArray(decodedByte, 0, decodedByte.length);
-        }
-
-        if (isZip) {
-            return fromZip(gameFolder, zipInnerPath, savePath, titleScreen);
+        if (SettingsManager.getGameBrowserLabelMode() == 0) {
+            return getTitle();
         } else {
-            return new Game(gameFolder, titleScreen);
+            return gameFolderName;
         }
     }
 
-	public String getTitle() {
-		return title;
-	}
+    public String getTitle() {
+        return title;
+    }
 
-	public String getGameFolderPath() {
-		return gameFolderPath;
-	}
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-	public String getSavePath() {
-		return savePath;
-	}
+    public native void reencodeTitle();
+
+    public String getCustomTitle() {
+        return SettingsManager.getCustomGameTitle(this);
+    }
+
+    public void setCustomTitle(String customTitle) {
+        SettingsManager.setCustomGameTitle(this, customTitle);
+    }
+
+    public String getGameFolderPath() {
+        return gameFolderPath;
+    }
+
+    public String getSavePath() {
+        return savePath;
+    }
 
     public void setSavePath(String path) {
         savePath = path;
     }
 
-	public boolean isFavorite() {
-		return isFavorite;
-	}
+    public String getGameFolderName() {
+        return gameFolderName;
+    }
 
-	public void setFavorite(boolean isFavorite) {
-		this.isFavorite = isFavorite;
-		if(isFavorite){
-			SettingsManager.addFavoriteGame(this);
-		} else {
-			SettingsManager.removeAFavoriteGame(this);
-		}
-	}
+    public void setGameFolderName(String gameFolderName) {
+        this.gameFolderName = gameFolderName;
+    }
 
-	private boolean isFavoriteFromSettings() {
-		return SettingsManager.getFavoriteGamesList().contains(this.title);
-	}
+    public boolean isFavorite() {
+        return isFavorite;
+    }
 
-	@Override
-	public int compareTo(Game game) {
-		if (this.isFavorite() && !game.isFavorite()) {
-			return -1;
-		}
-		if (!this.isFavorite() && game.isFavorite()) {
-			return 1;
-		}
-		return this.title.compareTo(game.title);
-	}
+    public void setFavorite(boolean isFavorite) {
+        this.isFavorite = isFavorite;
+        if(isFavorite){
+            SettingsManager.addFavoriteGame(this);
+        } else {
+            SettingsManager.removeAFavoriteGame(this);
+        }
+    }
 
-	public Encoding getEncoding() {
+    private boolean isFavoriteFromSettings() {
+        return SettingsManager.getFavoriteGamesList().contains(this.getKey());
+    }
+
+    @Override
+    public int compareTo(Game game) {
+        if (this.isFavorite() && !game.isFavorite()) {
+            return -1;
+        }
+        if (!this.isFavorite() && game.isFavorite()) {
+            return 1;
+        }
+        return this.getDisplayTitle().compareTo(game.getDisplayTitle());
+    }
+
+    /**
+     * Returns a unique key to be used for storing settings related to the game.
+     *
+     * @return unique key
+     */
+    public String getKey() {
+        return gameFolderPath.replaceAll("[/ ]", "_");
+    }
+
+    public Encoding getEncoding() {
         return SettingsManager.getGameEncoding(this);
-	}
+    }
 
-	public void setEncoding(Encoding encoding) {
+    public void setEncoding(Encoding encoding) {
         SettingsManager.setGameEncoding(this, encoding);
-	}
+        reencodeTitle();
+    }
+
+    /**
+     * @return The encoding number or "auto" when not configured (for use via JNI)
+     */
+    public String getEncodingCode() {
+        return getEncoding().getRegionCode();
+    }
+
+    public Bitmap getTitleScreen() {
+        return titleScreen;
+    }
+
+    public boolean isStandalone() {
+        return standalone;
+    }
+
+    public void setStandalone(boolean standalone) {
+        this.standalone = standalone;
+    }
 
     @NonNull
     @Override
     public String toString() {
-        return getTitle();
+        return getDisplayTitle();
+    }
+
+    public static Game fromCacheEntry(Context context, String cache) {
+        String[] entries = cache.split(String.valueOf(escapeCode));
+
+        if (entries.length != 7 || !entries[0].equals(cacheVersion)) {
+            return null;
+        }
+
+        String savePath = entries[1];
+        DocumentFile gameFolder = DocumentFile.fromTreeUri(context, Uri.parse(entries[2]));
+        if (gameFolder == null) {
+            return null;
+        }
+
+        String gameFolderName = entries[3];
+
+        String title = entries[4];
+
+        byte[] titleRaw = null;
+        if (!entries[5].equals("null")) {
+            titleRaw = Base64.decode(entries[5], 0);
+        }
+
+        byte[] titleScreen = null;
+        if (!entries[6].equals("null")) {
+            titleScreen = Base64.decode(entries[6], 0);
+        }
+
+        Game g = new Game(entries[2], savePath, titleScreen);
+        g.setTitle(title);
+        g.titleRaw = titleRaw;
+
+        if (g.titleRaw != null) {
+            g.reencodeTitle();
+        }
+
+        g.setGameFolderName(gameFolderName);
+
+        return g;
     }
 
     public String toCacheEntry() {
         StringBuilder sb = new StringBuilder();
 
-        sb.append(savePath);
+        // Cache structure: savePath | gameFolderPath | title | titleRaw | titleScreen
+        sb.append(cacheVersion); // 0
         sb.append(escapeCode);
-
-        sb.append(gameFolder.getUri());
+        sb.append(savePath); // 1
         sb.append(escapeCode);
-
-        sb.append(isZipArchive());
+        sb.append(gameFolderPath); // 2
         sb.append(escapeCode);
-
-        sb.append(zipInnerPath);
+        sb.append(gameFolderName); // 3
         sb.append(escapeCode);
-
-        if (titleScreen != null) {
+        sb.append(title); // 4
+        sb.append(escapeCode);
+        if (titleRaw != null) { // 5
+            sb.append(Base64.encodeToString(titleRaw, Base64.NO_WRAP));
+        } else {
+            sb.append("null");
+        }
+        sb.append(escapeCode);
+        if (titleScreen != null) { // 6
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             titleScreen.compress(Bitmap.CompressFormat.PNG, 90, baos);
             byte[] b = baos.toByteArray();
@@ -183,23 +245,4 @@ public class Game implements Comparable<Game> {
         return sb.toString();
     }
 
-    public DocumentFile getGameFolder() {
-        return gameFolder;
-    }
-
-    public Bitmap getTitleScreen() {
-        return titleScreen;
-    }
-
-    public Boolean isStandalone() {
-        return gameFolder == null;
-    }
-
-    public Boolean isZipArchive() {
-        return zipInnerPath != null;
-    }
-
-    public String getZipInnerPath() {
-        return zipInnerPath;
-    }
 }

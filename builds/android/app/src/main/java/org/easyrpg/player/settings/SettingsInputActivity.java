@@ -37,6 +37,10 @@ public class SettingsInputActivity extends AppCompatActivity implements View.OnC
         enableVibrateWhenSlidingCheckbox.setChecked(SettingsManager.isVibrateWhenSlidingDirectionEnabled());
         enableVibrateWhenSlidingCheckbox.setOnClickListener(this);
 
+        CheckBox showZXasABcheckbox = findViewById(R.id.settings_show_zx_as_ab);
+        showZXasABcheckbox.setChecked(SettingsManager.getShowZXasAB());
+        showZXasABcheckbox.setOnClickListener(this);
+
         configureFastForwardButton();
         configureLayoutTransparencySystem();
         configureLayoutSizeSystem();
@@ -57,6 +61,8 @@ public class SettingsInputActivity extends AppCompatActivity implements View.OnC
             enableVibrateWhenSlidingCheckbox.setEnabled(c.isChecked());
         } else if (id == R.id.settings_vibrate_when_sliding){
             SettingsManager.setVibrateWhenSlidingDirectionEnabled(((CheckBox) v).isChecked());
+        } else if (id == R.id.settings_show_zx_as_ab) {
+            SettingsManager.setShowZXasAB(((CheckBox)v).isChecked());
         }
     }
 
@@ -76,13 +82,13 @@ public class SettingsInputActivity extends AppCompatActivity implements View.OnC
         });
 
         fastForwardMultiplierSeekBar = findViewById(R.id.settings_fast_forward_multiplier);
-        fastForwardMultiplierSeekBar.setProgress(SettingsManager.getFastForwardMultiplier() - 2);
+        fastForwardMultiplierSeekBar.setProgress(SettingsManager.getSpeedModifierA() - 2);
         fastForwardMultiplierSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // The seekbar has values 0-8, we want 2-10
-                SettingsManager.setFastForwardMultiplier(seekBar.getProgress() + 2);
+                // The seekbar has values 0-98, we want 2-100
+                SettingsManager.setSpeedModifierA(seekBar.getProgress() + 2);
             }
 
             @Override

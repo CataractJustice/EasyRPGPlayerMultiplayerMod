@@ -138,10 +138,10 @@ bool LibretroUi::vChangeDisplaySurfaceResolution(int new_width, int new_height) 
 	return true;
 }
 
-void LibretroUi::ProcessEvents() {
+bool LibretroUi::ProcessEvents() {
 #	if defined(USE_JOYSTICK) && defined(SUPPORT_JOYSTICK)
 	if (CheckInputState == nullptr) {
-		return;
+		return true;
 	}
 
 	LibretroUi::input_poll_cb();
@@ -184,6 +184,8 @@ void LibretroUi::ProcessEvents() {
 	analog_input.trigger_right = normalize(CheckInputState(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_R2));
 #	endif
 #	endif
+
+	return true;
 }
 
 retro_video_refresh_t LibretroUi::UpdateWindow = nullptr;
@@ -425,6 +427,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info* game) {
 	// Convert RetroArch archive paths to paths our VFS understands
 	game_path = Utils::ReplaceAll(game_path, ".zip#", ".zip/");
 	game_path = Utils::ReplaceAll(game_path, ".easyrpg#", ".easyrpg/");
+	game_path = FileFinder::MakeCanonical(game_path, 0);
 
 	auto fs = FileFinder::Root().Create(game_path);
 	if (!fs) {

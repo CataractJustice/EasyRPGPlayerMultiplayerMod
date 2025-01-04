@@ -24,6 +24,7 @@
 #include <ostream>
 #include "filesystem.h"
 #include "utils.h"
+#include "system.h"
 
 namespace Filesystem_Stream {
 	class InputStream final : public std::istream {
@@ -37,6 +38,7 @@ namespace Filesystem_Stream {
 		InputStream& operator=(InputStream&& is) noexcept;
 
 		StringView GetName() const;
+		std::streampos GetSize() const;
 		void Close();
 
 		template <typename T>
@@ -47,6 +49,8 @@ namespace Filesystem_Stream {
 		bool Read0(T& obj);
 
 		std::string name;
+		mutable bool size_cached = false;
+		mutable std::streampos size = 0;
 	};
 
 	class OutputStream final : public std::ostream {
@@ -92,6 +96,36 @@ namespace Filesystem_Stream {
 	private:
 		std::vector<uint8_t> buffer;
 	};
+
+#ifdef USE_CUSTOM_FILEBUF
+	class FdStreamBuf : public std::streambuf {
+	public:
+		FdStreamBuf(int fd, bool is_read);
+		FdStreamBuf(FdStreamBuf const& other) = delete;
+		FdStreamBuf const& operator=(FdStreamBuf const& other) = delete;
+		~FdStreamBuf();
+
+	protected:
+		// Reading
+		int_type underflow() override;
+		std::streambuf::pos_type seekoff(std::streambuf::off_type offset, std::ios_base::seekdir dir, std::ios_base::openmode mode) override;
+		std::streambuf::pos_type seekpos(std::streambuf::pos_type pos, std::ios_base::openmode) override;
+
+		// Writing
+		int_type overflow(int c = EOF) override;
+		int sync() override;
+	private:
+		// Reading
+		void clear_buffer();
+		ssize_t bytes_remaining() const;
+		off_t file_offset = 0;
+
+		// Both
+		int fd;
+		bool is_read; // Streams can be read and write but we only always use one mode
+		std::array<char, USE_CUSTOM_FILEBUF> buffer;
+	};
+#endif
 
 	static constexpr std::ios_base::seekdir CSeekdirToCppSeekdir(int origin);
 

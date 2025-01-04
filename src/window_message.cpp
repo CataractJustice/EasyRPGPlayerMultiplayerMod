@@ -91,7 +91,8 @@ void DebugLogText(const char*, Args&&...) { }
 Window_Message::Window_Message(int ix, int iy, int iwidth, int iheight) :
 	Window_Selectable(ix, iy, iwidth, iheight),
 	number_input_window(new Window_NumberInput(0, 0)),
-	gold_window(new Window_Gold(Player::screen_width - Player::menu_offset_x - gold_window_width, Player::menu_offset_y, gold_window_width, gold_window_height))
+	gold_window(new Window_Gold(Player::screen_width - Player::menu_offset_x - gold_window_width, Player::menu_offset_y, gold_window_width, gold_window_height)),
+	pending_message(Game_Message::CommandCodeInserter)
 {
 	SetContents(Bitmap::Create(width - 16, height - 16));
 
@@ -264,6 +265,12 @@ void Window_Message::InsertNewPage() {
 	prev_char_printable = false;
 	prev_char_waited = true;
 
+	if (GetFont()) {
+		page_font = GetFont();
+	} else {
+		page_font = Font::Default();
+	}
+
 	// Position the message box vertically
 	// Game_Message::GetRealPosition() specify top/middle/bottom
 	if (Game_Message::GetRealPosition() == 0) {
@@ -317,7 +324,6 @@ void Window_Message::InsertNewPage() {
 			ShowGoldWindow();
 		}
 	}
-
 }
 
 void Window_Message::InsertNewLine() {
@@ -359,7 +365,7 @@ void Window_Message::FinishMessageProcessing() {
 	line_char_counter = 0;
 	SetIndex(-1);
 
-	pending_message = {};
+	pending_message = PendingMessage(Game_Message::CommandCodeInserter);
 
 	auto close_frames = Game_Battle::IsBattleRunning() ? 0 : message_animation_frames;
 
@@ -458,7 +464,6 @@ void Window_Message::UpdateMessage() {
 	}
 
 	auto system = Cache::SystemOrBlack();
-	auto font = Font::Default();
 
 	while (true) {
 		const auto* end = text.data() + text.size();
@@ -470,7 +475,7 @@ void Window_Message::UpdateMessage() {
 		}
 
 		if (!shape_ret.empty()) {
-			if (!DrawGlyph(*font, *system, shape_ret[0])) {
+			if (!DrawGlyph(*page_font, *system, shape_ret[0])) {
 				continue;
 			}
 
@@ -497,7 +502,7 @@ void Window_Message::UpdateMessage() {
 
 		const auto ch = tret.ch;
 		if (tret.is_exfont) {
-			if (!DrawGlyph(*font, *system, ch, true)) {
+			if (!DrawGlyph(*page_font, *system, ch, true)) {
 				text_index = text_prev;
 			}
 			continue;
@@ -572,7 +577,7 @@ void Window_Message::UpdateMessage() {
 				break;
 			case '_':
 				// Insert half size space
-				contents_x += Text::GetSize(*Font::Default(), " ").width / 2;
+				contents_x += Text::GetSize(*page_font, " ").width / 2;
 				DebugLogText("{}: MSG HalfWait \\_");
 				SetWaitForCharacter(1);
 				break;
@@ -630,7 +635,7 @@ void Window_Message::UpdateMessage() {
 			continue;
 		}
 
-		if (font->CanShape()) {
+		if (page_font->CanShape()) {
 			assert(shape_ret.empty());
 
 			auto text_index_shape = text_index;
@@ -656,10 +661,10 @@ void Window_Message::UpdateMessage() {
 				text32 += tret.ch;
 			}
 
-			shape_ret = font->Shape(text32);
+			shape_ret = page_font->Shape(text32);
 			continue;
 		} else {
-			if (!DrawGlyph(*font, *system, ch, false)) {
+			if (!DrawGlyph(*page_font, *system, ch, false)) {
 				text_index = text_prev;
 				continue;
 			}

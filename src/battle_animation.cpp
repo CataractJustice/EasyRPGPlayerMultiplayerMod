@@ -31,6 +31,8 @@
 #include "player.h"
 #include "options.h"
 #include "drawable_mgr.h"
+#include "scene_map.h"
+#include "spriteset_map.h"
 
 BattleAnimation::BattleAnimation(const lcf::rpg::Animation& anim, bool only_sound, int cutoff) :
 	animation(anim), only_sound(only_sound)
@@ -228,8 +230,12 @@ static int CalculateOffset(int pos, int target_height) {
 /////////
 
 BattleAnimationMap::BattleAnimationMap(const lcf::rpg::Animation& anim, Game_Character& target, bool global) :
-	BattleAnimation(anim), target(target), global(global)
+	BattleAnimation(anim), target(&target), global(global)
 {
+}
+
+void BattleAnimationMap::SetTarget(Game_Character& target) {
+	this->target = &target;
 }
 
 void BattleAnimationMap::Draw(Bitmap& dst) {
@@ -261,13 +267,20 @@ void BattleAnimationMap::DrawSingle(Bitmap& dst) {
 		return;
 	}
 	const int character_height = 24;
-	int vertical_center = target.GetScreenY(false, false) - character_height / 2;
+	int x_off = target->GetScreenX();
+	int y_off = target->GetScreenY(false);
+	if (Scene::instance->type == Scene::Map) {
+		x_off += static_cast<Scene_Map*>(Scene::instance.get())->spriteset->GetRenderOx();
+		y_off += static_cast<Scene_Map*>(Scene::instance.get())->spriteset->GetRenderOy();
+	}
+	int vertical_center = y_off - character_height / 2;
 	int offset = CalculateOffset(animation.position, character_height);
-	DrawAt(dst, target.GetScreenX(), vertical_center + offset);
+
+	DrawAt(dst, x_off, vertical_center + offset);
 }
 
 void BattleAnimationMap::FlashTargets(int r, int g, int b, int p) {
-	target.Flash(r, g, b, p, 0);
+	target->Flash(r, g, b, p, 0);
 }
 
 void BattleAnimationMap::ShakeTargets(int /* str */, int /* spd */, int /* time */) {

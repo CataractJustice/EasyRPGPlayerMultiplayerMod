@@ -360,11 +360,19 @@ bool Game_Battler::AddState(int state_id, bool allow_battle_states) {
 	if (GetBattleAlgorithm() != nullptr && GetBattleAlgorithm()->GetType() == Game_BattleAlgorithm::Type::Skill) {
 		auto* algo = static_cast<Game_BattleAlgorithm::Skill*>(GetBattleAlgorithm().get());
 		auto& skill = algo->GetSkill();
-		if (!IsSkillUsable(skill.ID)) {
+		// Only remove the action when it is a now invalid skill. Skills triggered through items are not affected.
+		if (!algo->GetItem() && !IsSkillUsable(skill.ID)) {
 			SetCharged(false);
 			this->SetBattleAlgorithm(std::make_shared<Game_BattleAlgorithm::None>(this));
 		}
 	}
+
+	Game_Battle::ManiacBattleHook(
+		Game_Interpreter_Battle::ManiacBattleHookType::SetState,
+		GetType() == Game_Battler::Type_Enemy,
+		GetPartyIndex(),
+		state_id
+	);
 
 	return was_added;
 }
@@ -583,6 +591,10 @@ Game_Party_Base& Game_Battler::GetParty() const {
 	} else {
 		return *Main_Data::game_enemyparty;
 	}
+}
+
+int Game_Battler::GetPartyIndex() {
+	return GetParty().GetMemberIndex(this);
 }
 
 void Game_Battler::UpdateBattle() {

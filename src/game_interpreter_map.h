@@ -51,7 +51,9 @@ public:
 	 */
 	void OnMapChange();
 
-	bool ExecuteCommand() override;
+	bool RequestMainMenuScene(int subscreen_id = -1, int actor_index = 0, bool is_db_actor = false);
+
+	bool ExecuteCommand(lcf::rpg::EventCommand const& com) override;
 
 private:
 	bool CommandRecallToLocation(lcf::rpg::EventCommand const& com);
@@ -81,6 +83,9 @@ private:
 	bool CommandOpenMainMenu(lcf::rpg::EventCommand const& com);
 	bool CommandOpenLoadMenu(lcf::rpg::EventCommand const& com);
 	bool CommandToggleAtbMode(lcf::rpg::EventCommand const& com);
+
+	bool CommandEasyRpgTriggerEventAt(lcf::rpg::EventCommand const& com);
+	bool CommandEasyRpgWaitForSingleMovement(lcf::rpg::EventCommand const& com);
 
 	AsyncOp ContinuationShowInnStart(int indent, int choice_result, int price);
 

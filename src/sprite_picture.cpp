@@ -53,7 +53,9 @@ void Sprite_Picture::OnPictureShow() {
 			priority = Drawable::GetPriorityForMapLayer(pic.data.map_layer);
 		}
 		if (priority > 0) {
-			SetZ(priority + pic_id);
+			// Small offset (10) to ensure there is space for graphics that are
+			// drawn at the image position (e.g. DynRPG Text Plugin)
+			SetZ(priority + pic_id * 10);
 		}
 	}
 }
@@ -110,8 +112,12 @@ void Sprite_Picture::Draw(Bitmap& dst) {
 		SetX(x);
 		SetY(y);
 	}
+
 	SetZoomX(data.current_magnify / 100.0);
 	SetZoomY(data.current_magnify / 100.0);
+	if (Player::IsPatchManiac()) {
+		SetZoomY(data.maniac_current_magnify_height / 100.0);
+	}
 
 	auto sr = GetSrcRect();
 	SetOx(sr.width / 2);
@@ -159,5 +165,37 @@ void Sprite_Picture::Draw(Bitmap& dst) {
 	SetFlipY((data.easyrpg_flip & lcf::rpg::SavePicture::EasyRpgFlip_y) == lcf::rpg::SavePicture::EasyRpgFlip_y);
 	SetBlendType(data.easyrpg_blend_mode);
 
+	// Don't draw anything if zoom is at zero, helps avoid a glitchy rotated sprite in the top left corner
+	if (GetZoomX() <= 0.0 || GetZoomY() <= 0.0) {
+		return;
+	}
 	Sprite::Draw(dst);
+}
+
+int Sprite_Picture::GetFrameWidth() const {
+	const auto& pic = Main_Data::game_pictures->GetPicture(pic_id);
+	const auto& data = pic.data;
+
+	auto& bitmap = GetBitmap();
+	assert(bitmap);
+
+	if (feature_spritesheet && pic.NumSpriteSheetFrames() > 1) {
+		return bitmap->GetWidth() / data.spritesheet_cols;
+	} else {
+		return bitmap->GetWidth();
+	}
+}
+
+int Sprite_Picture::GetFrameHeight() const {
+	const auto& pic = Main_Data::game_pictures->GetPicture(pic_id);
+	const auto& data = pic.data;
+
+	auto& bitmap = GetBitmap();
+	assert(bitmap);
+
+	if (feature_spritesheet && pic.NumSpriteSheetFrames() > 1) {
+		return bitmap->GetHeight() / data.spritesheet_rows;
+	} else {
+		return bitmap->GetHeight();
+	}
 }
