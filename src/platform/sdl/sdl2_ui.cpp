@@ -1352,9 +1352,6 @@ Rect Sdl2Ui::GetWindowMetrics() const {
 	} else {
 		return window_mode_metrics;
 	}
-<<<<<<< HEAD
-}
-=======
 }
 
 bool Sdl2Ui::OpenURL(StringView url) {
@@ -1374,4 +1371,3 @@ bool Sdl2Ui::OpenURL(StringView url) {
 	return false;
 #endif
 }
->>>>>>> 4ab1f8754e99e2ac31f2953c5e9a9b56b712bdd0

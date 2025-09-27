@@ -72,15 +72,12 @@
 #include "algo.h"
 #include "rand.h"
 
-<<<<<<< HEAD
 //Multiplayer mod:
 #include "multiplayer/packets/soundpacket.h"
 #include "multiplayer/connection.h"
 #include "multiplayer/packets/actorinfopacket.h"
 //
-=======
 using namespace Game_Interpreter_Shared;
->>>>>>> 4ab1f8754e99e2ac31f2953c5e9a9b56b712bdd0
 
 enum BranchSubcommand {
 	eOptionBranchElse = 1
