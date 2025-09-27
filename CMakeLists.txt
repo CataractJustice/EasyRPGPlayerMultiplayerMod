@@ -472,8 +472,6 @@ add_library(${PROJECT_NAME} OBJECT
 	src/window_teleport.h
 	src/window_varlist.cpp
 	src/window_varlist.h
-<<<<<<< HEAD
-	src/external/rang.hpp
 
 	src/multiplayer/packets/spritepacket.h
 	src/multiplayer/packets/facingpacket.h
@@ -509,8 +507,6 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/multiplayercharacter.cpp
 	src/multiplayer/textinput.h
 	src/multiplayer/textinput.cpp
-=======
->>>>>>> 4ab1f8754e99e2ac31f2953c5e9a9b56b712bdd0
 )
 
 # Multiplayer mod
