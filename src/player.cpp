@@ -20,8 +20,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
-#include <iomanip>
-#include <fstream>
 #include <memory>
 
 #ifdef _WIN32
@@ -45,7 +43,6 @@
 #include "game_battle.h"
 #include "game_destiny.h"
 #include "game_map.h"
-#include "game_message.h"
 #include "game_enemyparty.h"
 #include "game_ineluki.h"
 #include "game_party.h"
@@ -85,11 +82,12 @@
 #include "game_clock.h"
 #include "message_overlay.h"
 #include "audio_midi.h"
+#include "maniac_patch.h"
 
 //Multiplayer
 #include "multiplayer/init.h"
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(USE_LIBRETRO)
 #include "platform/android/android.h"
 #endif
 
@@ -125,6 +123,8 @@ namespace Player {
 	std::string escape_symbol;
 	uint32_t escape_char;
 	std::string game_title;
+	std::string game_title_original;
+	bool shared_game_and_save_directory = false;
 	std::shared_ptr<Meta> meta;
 	FileExtGuesser::RPG2KFileExtRemap fileext_map;
 	std::string startup_language;
@@ -133,14 +133,13 @@ namespace Player {
 	std::string replay_input_path;
 	std::string record_input_path;
 	std::string command_line;
-	int speed_modifier_a;
-	int speed_modifier_b;
 	int rng_seed = -1;
 	Game_ConfigPlayer player_config;
 	Game_ConfigGame game_config;
 #ifdef EMSCRIPTEN
 	std::string emscripten_game_name;
 #endif
+	Game_Clock::time_point last_auto_screenshot;
 }
 
 namespace {
@@ -155,7 +154,7 @@ namespace {
 }
 
 void Player::Init(std::vector<std::string> args) {
-	lcf::LogHandler::SetHandler([](lcf::LogHandler::Level level, StringView message, lcf::LogHandler::UserData) {
+	lcf::LogHandler::SetHandler([](lcf::LogHandler::Level level, std::string_view message, lcf::LogHandler::UserData) {
 		Output::Debug("lcf ({}): {}", lcf::LogHandler::kLevelTags.tag(level), message);
 	});
 
@@ -204,8 +203,8 @@ void Player::Init(std::vector<std::string> args) {
 	Input::AddRecordingData(Input::RecordingData::CommandLine, command_line);
 
 	player_config = std::move(cfg.player);
-	speed_modifier_a = cfg.input.speed_modifier_a.Get();
-	speed_modifier_b = cfg.input.speed_modifier_b.Get();
+
+	last_auto_screenshot = Game_Clock::now();
 }
 
 void Player::Run() {
@@ -278,6 +277,14 @@ void Player::MainLoop() {
 		return;
 	}
 
+	if (Player::player_config.automatic_screenshots.Get() && FileFinder::Game()) {
+		auto diff = std::chrono::duration_cast<std::chrono::seconds>(Game_Clock::now() - last_auto_screenshot);
+		if (diff.count() >= Player::player_config.automatic_screenshots_interval.Get()) {
+			last_auto_screenshot = Game_Clock::now();
+			Output::TakeScreenshot(true);
+		}
+	}
+
 	auto frame_limit = DisplayUi->GetFrameLimit();
 	if (frame_limit == Game_Clock::duration()) {
 		return;
@@ -318,10 +325,10 @@ void Player::UpdateInput() {
 	}
 	float speed = 1.0;
 	if (Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
-		speed = speed_modifier_a;
+		speed = Input::GetInputSource()->GetConfig().speed_modifier_a.Get();
 	}
 	if (Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
-		speed = speed_modifier_b;
+		speed = Input::GetInputSource()->GetConfig().speed_modifier_b.Get();
 	}
 	Game_Clock::SetGameSpeedFactor(speed);
 
@@ -380,7 +387,7 @@ void Player::Update(bool update_scene) {
 		Scene::instance->Update();
 	}
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) && !defined(USE_LIBRETRO)
 	EpAndroid::invoke();
 #endif
 }
@@ -552,6 +559,16 @@ Game_Config Player::ParseCommandLine() {
 			}
 			continue;
 		}
+		if (cp.ParseNext(arg, 1, "--language-path") && arg.NumValues() > 0) {
+			if (arg.NumValues() > 0) {
+				auto langfs = FileFinder::Root().Create(FileFinder::MakeCanonical(arg.Value(0), 0));
+				if (!langfs) {
+					Output::Error("Invalid --language-path {}", arg.Value(0));
+				}
+				FileFinder::SetLanguageFilesystem(langfs);
+			}
+			continue;
+		}
 		if (cp.ParseNext(arg, 1, "--save-path")) {
 			if (arg.NumValues() > 0) {
 				auto savefs = FileFinder::Root().Create(FileFinder::MakeCanonical(arg.Value(0), 0));
@@ -681,7 +698,8 @@ Game_Config Player::ParseCommandLine() {
 void Player::CreateGameObjects() {
 	// Parse game specific settings
 	CmdlineParser cp(arguments);
-	game_config = Game_ConfigGame::Create(cp);
+	game_config = Game_ConfigGame();
+	game_config.Initialize(cp);
 
 	// Reinit MIDI
 	MidiDecoder::Reset();
@@ -709,7 +727,9 @@ void Player::CreateGameObjects() {
 
 	std::string game_path = FileFinder::GetFullFilesystemPath(FileFinder::Game());
 	std::string save_path = FileFinder::GetFullFilesystemPath(FileFinder::Save());
-	if (game_path == save_path) {
+	shared_game_and_save_directory = (game_path == save_path);
+
+	if (shared_game_and_save_directory) {
 		Output::DebugStr("Game and Save Directory:");
 		FileFinder::DumpFilesystem(FileFinder::Game());
 	} else {
@@ -730,7 +750,7 @@ void Player::CreateGameObjects() {
 		if (ini_stream) {
 			lcf::INIReader ini(ini_stream);
 			if (ini.ParseError() != -1) {
-				std::string title = ini.Get("RPG_RT", "GameTitle", GAME_TITLE);
+				auto title = ini.Get("RPG_RT", "GameTitle", GAME_TITLE);
 				game_title = lcf::ReaderUtil::Recode(title, encoding);
 				no_rtp_warning_flag = ini.Get("RPG_RT", "FullPackageFlag", "0") == "1" ? true : no_rtp_flag;
 				if (ini.HasValue("RPG_RT", "WinW") || ini.HasValue("RPG_RT", "WinH")) {
@@ -742,16 +762,7 @@ void Player::CreateGameObjects() {
 		}
 	}
 
-	std::stringstream title;
-	if (!game_title.empty()) {
-		Output::Debug("Loading game {}", game_title);
-		title << game_title << " - ";
-		Input::AddRecordingData(Input::RecordingData::GameTitle, game_title);
-	} else {
-		Output::Debug("Could not read game title.");
-	}
-	title << GAME_TITLE;
-	DisplayUi->SetTitle(title.str());
+	UpdateTitle(game_title);
 
 	if (no_rtp_warning_flag) {
 		Output::Debug("Game does not need RTP (FullPackageFlag=1)");
@@ -857,6 +868,28 @@ void Player::CreateGameObjects() {
 	}
 }
 
+void Player::UpdateTitle(std::string new_game_title) {
+	if (!game_title.empty() && game_title != new_game_title) {
+		if (game_title_original == new_game_title) {
+			game_title_original = "";
+		} else {
+			game_title_original = game_title;
+		}
+		game_title = new_game_title;
+	}
+
+	std::stringstream title;
+	if (!game_title.empty()) {
+		Output::Debug("Loading game {}", game_title);
+		title << new_game_title << " - ";
+		Input::AddRecordingData(Input::RecordingData::GameTitle, game_title);
+	} else {
+		Output::Debug("Could not read game title.");
+	}
+	title << GAME_TITLE;
+	DisplayUi->SetTitle(title.str());
+}
+
 bool Player::ChangeResolution(int width, int height) {
 	if (!DisplayUi->ChangeDisplaySurfaceResolution(width, height)) {
 		Output::Warning("Resolution change to {}x{} failed", width, height);
@@ -892,6 +925,8 @@ void Player::RestoreBaseResolution() {
 
 void Player::ResetGameObjects() {
 	// The init order is important
+	ManiacPatch::GlobalSave::Save(true);
+
 	Main_Data::Cleanup();
 
 	Main_Data::game_switches = std::make_unique<Game_Switches>();
@@ -1152,7 +1187,7 @@ void Player::LoadSavegame(const std::string& save_name, int save_id) {
 	} else {
 		verstr << "EasyRPG Player ";
 		char verbuf[64];
-		sprintf(verbuf, "%d.%d.%d", ver / 1000 % 10, ver / 100 % 10, ver / 10 % 10);
+		snprintf(verbuf, std::size(verbuf), "%d.%d.%d", ver / 1000 % 10, ver / 100 % 10, ver / 10 % 10);
 		verstr << verbuf;
 		if (ver % 10 > 0) {
 			verstr << "." << ver % 10;
@@ -1429,8 +1464,12 @@ Engine options:
  --font-path PATH     The path in which the settings scene looks for fonts.
                       The default is config-path/Font.
  --language LANG      Load the game translation in language/LANG folder.
+ --language-path PATH Use the translations at PATH instead of the translations
+                      in the language folder.
  --load-game-id N     Skip the title scene and load SaveN.lsd (N is padded to
                       two digits).
+ --log-file FILE      Path to the logfile. The Player will write diagnostic
+                      messages to this file.
  --new-game           Skip the title scene and start a new game directly.
  --no-log-color       Disable colors in terminal log.
  --no-rtp             Disable support for the Runtime Package (RTP).
@@ -1442,6 +1481,8 @@ Engine options:
  --patch-direct-menu VAR
                       Directly access subscreens of the default menu by setting
                       VAR.
+ --patch-encounter-alert VAR
+                      Set troop id to variable VAR and skip random battles.
  --patch-dynrpg       Enable support of DynRPG patch by Cherry (very limited).
  --patch-easyrpg      Enable EasyRPG extensions.
  --patch-key-patch    Enable Key Patch by Ineluki.

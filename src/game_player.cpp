@@ -433,7 +433,7 @@ bool Game_Player::CheckActionEvent() {
 	return result || got_action;
 }
 
-bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_decision_key) {
+bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_decision_key, bool face_player) {
 	if (InAirship()) {
 		return false;
 	}
@@ -449,13 +449,13 @@ bool Game_Player::CheckEventTriggerHere(TriggerSet triggers, bool triggered_by_d
 				&& trigger >= 0
 				&& triggers[trigger]) {
 			SetEncounterCalling(false);
-			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, true);
+			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, face_player);
 		}
 	}
 	return result;
 }
 
-bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key) {
+bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool triggered_by_decision_key, bool face_player) {
 	if (InAirship()) {
 		return false;
 	}
@@ -470,7 +470,7 @@ bool Game_Player::CheckEventTriggerThere(TriggerSet triggers, int x, int y, bool
 				&& trigger >= 0
 				&& triggers[trigger]) {
 			SetEncounterCalling(false);
-			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, true);
+			result |= ev.ScheduleForegroundExecution(triggered_by_decision_key, face_player);
 		}
 	}
 	return result;
@@ -891,6 +891,12 @@ int Game_Player::GetPanWait() {
 	return distance / speed + (distance % speed != 0);
 }
 
+// Fixes compilation error with OpenOrbis toolchain where std::abs fails to cast to double on values where it should
+#if __PS4__
+#	define PS4_WORKAROUND (double)
+#else
+#	define PS4_WORKAROUND
+#endif
 void Game_Player::UpdatePan() {
 	if (!IsPanActive())
 		return;
@@ -907,8 +913,8 @@ void Game_Player::UpdatePan() {
 		const double step_y = data()->maniac_vertical_pan_speed;
 
 		// Maniac uses doubles for smoother screen scrolling
-		double dx2 = std::min(step_x, std::abs(static_cast<double>(pan_remain_x)));
-		double dy2 = std::min(step_y, std::abs(static_cast<double>(pan_remain_y)));
+		double dx2 = std::min(step_x, PS4_WORKAROUND std::abs(static_cast<double>(pan_remain_x)));
+		double dy2 = std::min(step_y, PS4_WORKAROUND std::abs(static_cast<double>(pan_remain_y)));
 
 		dx2 = pan_remain_x >= 0 ? dx2 : -dx2;
 		dy2 = pan_remain_y >= 0 ? dy2 : -dy2;
@@ -944,6 +950,6 @@ void Game_Player::UpdatePan() {
 	data()->pan_current_y -= dy;
 }
 
-bool Game_Player::TriggerEventAt(int x, int y) {
-	return CheckEventTriggerThere({ lcf::rpg::EventPage::Trigger_action }, x, y, true);
+bool Game_Player::TriggerEventAt(int x, int y, bool triggered_by_decision_key, bool face_player) {
+	return CheckEventTriggerThere({ lcf::rpg::EventPage::Trigger_action }, x, y, triggered_by_decision_key, face_player);
 }

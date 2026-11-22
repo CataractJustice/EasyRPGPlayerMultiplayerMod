@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = --install -I builds/autoconf/m4
 
-EXTRA_DIST = CMakeLists.txt README.md builds docs resources
+EXTRA_DIST = CMakeLists.txt CMakePresets.json README.md builds docs resources
 MOSTLYCLEANFILES = $(DX_CLEANFILES)
 
 bin_PROGRAMS = easyrpg-player
@@ -42,8 +42,6 @@ libeasyrpg_player_a_SOURCES = \
 	src/baseui.h \
 	src/battle_animation.cpp \
 	src/battle_animation.h \
-	src/battle_message.cpp \
-	src/battle_message.h \
 	src/bitmap.cpp \
 	src/bitmap.h \
 	src/bitmapfont.h \
@@ -160,6 +158,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/game_interpreter_battle.h \
 	src/game_interpreter_control_variables.cpp \
 	src/game_interpreter_control_variables.h \
+	src/game_interpreter_debug.cpp \
+	src/game_interpreter_debug.h \
 	src/game_interpreter_map.cpp \
 	src/game_interpreter_map.h \
 	src/game_interpreter_shared.cpp \
@@ -168,6 +168,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/game_map.h \
 	src/game_message.cpp \
 	src/game_message.h \
+	src/game_message_terms.cpp \
+	src/game_message_terms.h \
 	src/game_party.cpp \
 	src/game_party.h \
 	src/game_party_base.cpp \
@@ -176,6 +178,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/game_pictures.h \
 	src/game_player.cpp \
 	src/game_player.h \
+	src/game_runtime_patches.cpp \
+	src/game_runtime_patches.h \
 	src/game_screen.cpp \
 	src/game_screen.h \
 	src/game_strings.cpp \
@@ -192,6 +196,7 @@ libeasyrpg_player_a_SOURCES = \
 	src/game_vehicle.h \
 	src/game_windows.cpp \
 	src/game_windows.h \
+	src/generated/bitmapfont_baekmuk.h \
 	src/generated/bitmapfont_rmg2000.h \
 	src/generated/bitmapfont_ttyp0.h \
 	src/generated/bitmapfont_wqy.h \
@@ -287,6 +292,8 @@ libeasyrpg_player_a_SOURCES = \
 	src/scene_gameover.h \
 	src/scene_item.cpp \
 	src/scene_item.h \
+	src/scene_language.cpp \
+	src/scene_language.h \
 	src/scene_load.cpp \
 	src/scene_load.h \
 	src/scene_logo.cpp \
@@ -377,8 +384,6 @@ libeasyrpg_player_a_SOURCES = \
 	src/window_actortarget.h \
 	src/window_base.cpp \
 	src/window_base.h \
-	src/window_battlecommand.cpp \
-	src/window_battlecommand.h \
 	src/window_battlemessage.cpp \
 	src/window_battlemessage.h \
 	src/window_battlestatus.cpp \
@@ -452,11 +457,22 @@ libeasyrpg_player_a_SOURCES = \
 	src/window_varlist.cpp \
 	src/window_varlist.h
 
+SOURCEFILES_SDL3 = \
+	src/platform/sdl/sdl3_ui.cpp \
+	src/platform/sdl/sdl3_ui.h \
+	src/platform/sdl/sdl3_audio.cpp \
+	src/platform/sdl/sdl3_audio.h
+if HAVE_SDL3
+libeasyrpg_player_a_SOURCES += $(SOURCEFILES_SDL3)
+else
+EXTRA_DIST += $(SOURCEFILES_SDL3)
+endif
+
 SOURCEFILES_SDL2 = \
 	src/platform/sdl/sdl2_ui.cpp \
 	src/platform/sdl/sdl2_ui.h \
-	src/platform/sdl/sdl_audio.cpp \
-	src/platform/sdl/sdl_audio.h
+	src/platform/sdl/sdl2_audio.cpp \
+	src/platform/sdl/sdl2_audio.h
 if HAVE_SDL2
 libeasyrpg_player_a_SOURCES += $(SOURCEFILES_SDL2)
 else
@@ -528,13 +544,13 @@ EXTRA_DIST += \
 	bench/variables.cpp \
 	src/platform/3ds/audio.cpp \
 	src/platform/3ds/audio.h \
-	src/platform/3ds/clock.cpp \
 	src/platform/3ds/clock.h \
 	src/platform/3ds/input_buttons.cpp \
 	src/platform/3ds/main.cpp \
 	src/platform/3ds/ui.cpp \
 	src/platform/3ds/ui.h \
 	src/platform/amigaos4/cmath \
+	src/platform/android/android.cpp \
 	src/platform/android/android.h \
 	src/platform/android/filesystem_apk.cpp \
 	src/platform/android/filesystem_apk.h \
@@ -560,7 +576,6 @@ EXTRA_DIST += \
 	src/platform/psp/psp_input_buttons.cpp \
 	src/platform/psvita/audio.cpp \
 	src/platform/psvita/audio.h \
-	src/platform/psvita/clock.cpp \
 	src/platform/psvita/clock.h \
 	src/platform/psvita/input_buttons.cpp \
 	src/platform/psvita/main.cpp \
@@ -568,16 +583,19 @@ EXTRA_DIST += \
 	src/platform/psvita/ui.h \
 	src/platform/switch/audio.cpp \
 	src/platform/switch/audio.h \
-	src/platform/switch/clock.cpp \
 	src/platform/switch/clock.h \
 	src/platform/switch/input_buttons.cpp \
 	src/platform/switch/main.cpp \
 	src/platform/switch/ui.cpp \
 	src/platform/switch/ui.h \
-	src/platform/wii/clock.cpp \
+	src/platform/wii/audio.cpp \
+	src/platform/wii/audio.h \
 	src/platform/wii/clock.h \
 	src/platform/wii/input_buttons.cpp \
 	src/platform/wii/main.cpp \
+	src/platform/wiiu/input_buttons.cpp \
+	src/platform/wiiu/main.cpp \
+	src/platform/wiiu/main.h \
 	src/platform/windows/midiout_device_win32.cpp \
 	src/platform/windows/midiout_device_win32.h \
 	src/platform/windows/utils.cpp \
@@ -747,6 +765,7 @@ test_runner_SOURCES = \
 	tests/game_player_input.cpp \
 	tests/game_player_pan.cpp \
 	tests/game_player_savecount.cpp \
+	tests/json.cpp \
 	tests/mock_game.cpp \
 	tests/mock_game.h \
 	tests/move_route.cpp \

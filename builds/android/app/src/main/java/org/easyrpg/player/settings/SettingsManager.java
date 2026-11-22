@@ -33,6 +33,7 @@ public class SettingsManager {
     private static boolean ignoreLayoutSizePreferencesEnabled;
     private static boolean forcedLandscape;
     private static boolean stretch;
+    private static boolean fullscreen;
     private static boolean rtpScanningEnabled;
     private static int imageSize, gameResolution;
     private static int layoutTransparency, layoutSize, fastForwardMode, fastForwardMultiplier;
@@ -51,7 +52,7 @@ public class SettingsManager {
         FONTS_FOLDER_NAME = "fonts";
     public static int FAST_FORWARD_MODE_HOLD = 0, FAST_FORWARD_MODE_TAP = 1;
     private static int gameBrowserLabelMode = 0;
-    private static boolean showZXasAB = false;
+    private static boolean showABasZX = false;
 
     private static List<String> imageSizeOption = Arrays.asList("nearest", "integer", "bilinear");
     private static List<String> gameResolutionOption = Arrays.asList("original", "widescreen", "ultrawide");
@@ -80,6 +81,7 @@ public class SettingsManager {
         layoutSize = sharedPref.getInt(LAYOUT_SIZE.toString(), 100);
         forcedLandscape = sharedPref.getBoolean(FORCED_LANDSCAPE.toString(), false);
         stretch = configIni.video.getBoolean(STRETCH.toString(), false);
+        fullscreen = configIni.video.getBoolean(FULLSCREEN.toString(), true);
         fastForwardMode = sharedPref.getInt(FAST_FORWARD_MODE.toString(), FAST_FORWARD_MODE_TAP);
 
         musicVolume = configIni.audio.getInteger(MUSIC_VOLUME.toString(), 100);
@@ -107,7 +109,7 @@ public class SettingsManager {
 
         gameBrowserLabelMode = sharedPref.getInt(GAME_BROWSER_LABEL_MODE.toString(), 0);
 
-        showZXasAB = sharedPref.getBoolean(SHOW_ZX_AS_AB.toString(), false);
+        showABasZX = sharedPref.getBoolean(SHOW_AB_AS_ZX.toString(), false);
     }
 
     public static Set<String> getFavoriteGamesList() {
@@ -289,6 +291,16 @@ public class SettingsManager {
         configIni.save();
     }
 
+    public static boolean isFullscreen() {
+        return fullscreen;
+    }
+
+    public static void setFullscreen(boolean b) {
+        fullscreen = b;
+        configIni.video.set(FULLSCREEN.toString(), b);
+        configIni.save();
+    }
+
     public static Uri getEasyRPGFolderURI(Context context) {
         if (easyRPGFolderURI == null) {
             SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
@@ -309,7 +321,7 @@ public class SettingsManager {
     }
 
     public static Uri getGamesFolderURI(Context context) {
-        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, easyRPGFolderURI);
+        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, getEasyRPGFolderURI(context));
         if (easyRPGFolder != null) {
             return Helper.findFileUri(context, easyRPGFolder.getUri(), GAMES_FOLDER_NAME);
         } else {
@@ -317,8 +329,17 @@ public class SettingsManager {
         }
     }
 
+    public static Uri getSavesFolderURI(Context context) {
+        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, getEasyRPGFolderURI(context));
+        if (easyRPGFolder != null) {
+            return Helper.findFileUri(context, easyRPGFolder.getUri(), SAVES_FOLDER_NAME);
+        } else {
+            return null;
+        }
+    }
+
     public static Uri getRTPFolderURI(Context context) {
-        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, easyRPGFolderURI);
+        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, getEasyRPGFolderURI(context));
         if (easyRPGFolder != null) {
             return Helper.findFileUri(context, easyRPGFolder.getUri(), RTP_FOLDER_NAME);
         } else {
@@ -327,7 +348,7 @@ public class SettingsManager {
     }
 
     public static Uri getFontsFolderURI(Context context) {
-        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, easyRPGFolderURI);
+        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, getEasyRPGFolderURI(context));
         if (easyRPGFolder != null) {
             return Helper.findFileUri(context, easyRPGFolder.getUri(), FONTS_FOLDER_NAME);
         } else {
@@ -336,7 +357,7 @@ public class SettingsManager {
     }
 
     public static Uri getSoundFontsFolderURI(Context context) {
-        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, easyRPGFolderURI);
+        DocumentFile easyRPGFolder = Helper.getFileFromURI(context, getEasyRPGFolderURI(context));
         if (easyRPGFolder != null) {
             return Helper.findFileUri(context, easyRPGFolder.getUri(), SOUND_FONTS_FOLDER_NAME);
         } else {
@@ -505,13 +526,13 @@ public class SettingsManager {
         editor.commit();
     }
 
-    public static boolean getShowZXasAB() {
-        return showZXasAB;
+    public static boolean getShowABasZX() {
+        return showABasZX;
     }
 
-    public static void setShowZXasAB(boolean b) {
-        showZXasAB = b;
-        editor.putBoolean(SHOW_ZX_AS_AB.toString(), b);
+    public static void setShowABasZX(boolean b) {
+        showABasZX = b;
+        editor.putBoolean(SHOW_AB_AS_ZX.toString(), b);
         editor.commit();
     }
 }

@@ -26,23 +26,22 @@
 #include <cassert>
 #include "game_interpreter.h"
 #include "async_handler.h"
-#include "audio.h"
 #include "game_dynrpg.h"
 #include "filefinder.h"
 #include "game_destiny.h"
 #include "game_map.h"
 #include "game_event.h"
-#include "game_enemyparty.h"
-#include "game_ineluki.h"
 #include "game_player.h"
 #include "game_targets.h"
 #include "game_switches.h"
 #include "game_variables.h"
 #include "game_party.h"
 #include "game_actors.h"
+#include "game_strings.h"
 #include "game_system.h"
 #include "game_message.h"
 #include "game_pictures.h"
+#include "game_runtime_patches.h"
 #include "game_screen.h"
 #include "game_interpreter_control_variables.h"
 #include "game_windows.h"
@@ -70,7 +69,6 @@
 #include "transition.h"
 #include "baseui.h"
 #include "algo.h"
-#include "rand.h"
 
 //Multiplayer mod:
 #include "multiplayer/packets/soundpacket.h"
@@ -82,10 +80,6 @@ using namespace Game_Interpreter_Shared;
 enum BranchSubcommand {
 	eOptionBranchElse = 1
 };
-
-constexpr int Game_Interpreter::loop_limit;
-constexpr int Game_Interpreter::call_stack_limit;
-constexpr int Game_Interpreter::subcommand_sentinel;
 
 Game_Interpreter::Game_Interpreter(bool _main_flag) {
 	main_flag = _main_flag;
@@ -109,10 +103,10 @@ bool Game_Interpreter::IsRunning() const {
 }
 
 // Setup.
-void Game_Interpreter::Push(
+void Game_Interpreter::PushInternal(
+	InterpreterPush push_info,
 	std::vector<lcf::rpg::EventCommand> _list,
 	int event_id,
-	bool started_by_decision_key,
 	int event_page_id
 ) {
 	if (_list.empty()) {
@@ -123,14 +117,27 @@ void Game_Interpreter::Push(
 		Output::Error("Call Event limit ({}) has been exceeded", call_stack_limit);
 	}
 
+	auto type_ex = std::get<ExecutionType>(push_info);
+	auto type_src = std::get<EventType>(push_info);
+
 	lcf::rpg::SaveEventExecFrame frame;
 	frame.ID = _state.stack.size() + 1;
 	frame.commands = std::move(_list);
 	frame.current_command = 0;
-	frame.triggered_by_decision_key = started_by_decision_key;
-	frame.event_id = event_id;
+	frame.triggered_by_decision_key = type_ex == ExecutionType::Action;
+	if (type_src == EventType::MapEvent) {
+		frame.event_id = event_id;
+	}
 	frame.maniac_event_id = event_id;
 	frame.maniac_event_page_id = event_page_id;
+
+	if (type_ex <= ExecutionType::BattleParallel) {
+		frame.maniac_event_info = static_cast<int>(type_ex);
+	}
+
+	if (type_src <= EventType::BattleEvent) {
+		frame.maniac_event_info |= (static_cast<int>(type_src) << 4);
+	}
 
 	if (_state.stack.empty() && main_flag && !Game_Battle::IsBattleRunning()) {
 		Main_Data::game_system->ClearMessageFace();
@@ -323,7 +330,7 @@ bool Game_Interpreter::ReachedLoopLimit() const {
 int Game_Interpreter::GetThisEventId() const {
 	auto event_id = GetCurrentEventId();
 
-	if (event_id == 0 && (Player::IsRPG2k3E() || Player::game_config.patch_common_this_event.Get())) {
+	if (event_id == 0 && (Player::IsRPG2k3E() || Player::IsPatchCommonThisEvent())) {
 		// RM2k3E allows "ThisEvent" commands to run from called
 		// common events. It operates on the last map event in
 		// the call stack.
@@ -390,6 +397,13 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 		EndEventProcessing();
 		return;
 	}
+
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	Player::active_interpreter_flags = &_state.easyrpg_runtime_flags;
+	auto flags_guard = lcf::makeScopeGuard([]() {
+		Player::active_interpreter_flags = &Player::interpreter_default_flags;
+	});
+#endif
 
 	for (; loop_count < loop_limit; ++loop_count) {
 		// If something is calling a menu, we're allowed to execute only 1 command per interpreter. So we pass through if loop_count == 0, and stop at 1 or greater.
@@ -538,16 +552,22 @@ void Game_Interpreter::Update(bool reset_loop_count) {
 }
 
 // Setup Starting Event
-void Game_Interpreter::Push(Game_Event* ev) {
-	Push(ev->GetList(), ev->GetId(), ev->WasStartedByDecisionKey(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0);
+void Game_Interpreter::PushInternal(Game_Event* ev, ExecutionType ex_type) {
+	PushInternal(
+		{ ex_type, EventType::MapEvent },
+		ev->GetList(), ev->GetId(), ev->GetActivePage() ? ev->GetActivePage()->ID : 0
+	);
 }
 
-void Game_Interpreter::Push(Game_Event* ev, const lcf::rpg::EventPage* page, bool triggered_by_decision_key) {
-	Push(page->event_commands, ev->GetId(), triggered_by_decision_key, page->ID);
+void Game_Interpreter::PushInternal(Game_Event* ev, const lcf::rpg::EventPage* page, ExecutionType ex_type) {
+	PushInternal(
+		{ ex_type, EventType::MapEvent },
+		page->event_commands, ev->GetId(), page->ID
+	);
 }
 
-void Game_Interpreter::Push(Game_CommonEvent* ev) {
-	Push(ev->GetList(), 0, false);
+void Game_Interpreter::PushInternal(Game_CommonEvent* ev, ExecutionType ex_type) {
+	PushInternal({ ex_type, EventType::CommonEvent }, ev->GetList(), ev->GetId());
 }
 
 bool Game_Interpreter::CheckGameOver() {
@@ -591,218 +611,218 @@ bool Game_Interpreter::ExecuteCommand() {
 bool Game_Interpreter::ExecuteCommand(lcf::rpg::EventCommand const& com) {
 	switch (static_cast<Cmd>(com.code)) {
 		case Cmd::ShowMessage:
-			return CommandShowMessage(com);
+			return CmdSetup<&Game_Interpreter::CommandShowMessage, 0>(com);
 		case Cmd::MessageOptions:
-			return CommandMessageOptions(com);
+			return CmdSetup<&Game_Interpreter::CommandMessageOptions, 4>(com);
 		case Cmd::ChangeFaceGraphic:
-			return CommandChangeFaceGraphic(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeFaceGraphic, 3>(com);
 		case Cmd::ShowChoice:
-			return CommandShowChoices(com);
+			return CmdSetup<&Game_Interpreter::CommandShowChoices, 1>(com);
 		case Cmd::ShowChoiceOption:
-			return CommandShowChoiceOption(com);
+			return CmdSetup<&Game_Interpreter::CommandShowChoiceOption, 1>(com);
 		case Cmd::ShowChoiceEnd:
-			return CommandShowChoiceEnd(com);
+			return CmdSetup<&Game_Interpreter::CommandShowChoiceEnd, 0>(com);
 		case Cmd::InputNumber:
-			return CommandInputNumber(com);
+			return CmdSetup<&Game_Interpreter::CommandInputNumber, 2>(com);
 		case Cmd::ControlSwitches:
-			return CommandControlSwitches(com);
+			return CmdSetup<&Game_Interpreter::CommandControlSwitches, 4>(com);
 		case Cmd::ControlVars:
-			return CommandControlVariables(com);
+			return CmdSetup<&Game_Interpreter::CommandControlVariables, 7>(com);
 		case Cmd::TimerOperation:
-			return CommandTimerOperation(com);
+			return CmdSetup<&Game_Interpreter::CommandTimerOperation, 5>(com);
 		case Cmd::ChangeGold:
-			return CommandChangeGold(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeGold, 3>(com);
 		case Cmd::ChangeItems:
-			return CommandChangeItems(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeItems, 5>(com);
 		case Cmd::ChangePartyMembers:
-			return CommandChangePartyMember(com);
+			return CmdSetup<&Game_Interpreter::CommandChangePartyMember, 3>(com);
 		case Cmd::ChangeExp:
-			return CommandChangeExp(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeExp, 6>(com);
 		case Cmd::ChangeLevel:
-			return CommandChangeLevel(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeLevel, 6>(com);
 		case Cmd::ChangeParameters:
-			return CommandChangeParameters(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeParameters, 6>(com);
 		case Cmd::ChangeSkills:
-			return CommandChangeSkills(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSkills, 5>(com);
 		case Cmd::ChangeEquipment:
-			return CommandChangeEquipment(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeEquipment, 5>(com);
 		case Cmd::ChangeHP:
-			return CommandChangeHP(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeHP, 6>(com);
 		case Cmd::ChangeSP:
-			return CommandChangeSP(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSP, 5>(com);
 		case Cmd::ChangeCondition:
-			return CommandChangeCondition(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeCondition, 4>(com);
 		case Cmd::FullHeal:
-			return CommandFullHeal(com);
+			return CmdSetup<&Game_Interpreter::CommandFullHeal, 2>(com);
 		case Cmd::SimulatedAttack:
-			return CommandSimulatedAttack(com);
+			return CmdSetup<&Game_Interpreter::CommandSimulatedAttack, 8>(com);
 		case Cmd::Wait:
-			return CommandWait(com);
+			return CmdSetup<&Game_Interpreter::CommandWait, 1>(com);
 		case Cmd::PlayBGM:
-			return CommandPlayBGM(com);
+			return CmdSetup<&Game_Interpreter::CommandPlayBGM, 4>(com);
 		case Cmd::FadeOutBGM:
-			return CommandFadeOutBGM(com);
+			return CmdSetup<&Game_Interpreter::CommandFadeOutBGM, 1>(com);
 		case Cmd::PlaySound:
-			return CommandPlaySound(com);
+			return CmdSetup<&Game_Interpreter::CommandPlaySound, 3>(com);
 		case Cmd::EndEventProcessing:
-			return CommandEndEventProcessing(com);
+			return CmdSetup<&Game_Interpreter::CommandEndEventProcessing, 0>(com);
 		case Cmd::Comment:
 		case Cmd::Comment_2:
-			return CommandComment(com);
+			return CmdSetup<&Game_Interpreter::CommandComment, 0>(com);
 		case Cmd::GameOver:
-			return CommandGameOver(com);
+			return CmdSetup<&Game_Interpreter::CommandGameOver, 0>(com);
 		case Cmd::ChangeHeroName:
-			return CommandChangeHeroName(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeHeroName, 1>(com);
 		case Cmd::ChangeHeroTitle:
-			return CommandChangeHeroTitle(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeHeroTitle, 1>(com);
 		case Cmd::ChangeSpriteAssociation:
-			return CommandChangeSpriteAssociation(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSpriteAssociation, 3>(com);
 		case Cmd::ChangeActorFace:
-			return CommandChangeActorFace(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeActorFace, 2>(com);
 		case Cmd::ChangeVehicleGraphic:
-			return CommandChangeVehicleGraphic(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeVehicleGraphic, 2>(com);
 		case Cmd::ChangeSystemBGM:
-			return CommandChangeSystemBGM(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSystemBGM, 5>(com);
 		case Cmd::ChangeSystemSFX:
-			return CommandChangeSystemSFX(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSystemSFX, 4>(com);
 		case Cmd::ChangeSystemGraphics:
-			return CommandChangeSystemGraphics(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSystemGraphics, 2>(com);
 		case Cmd::ChangeScreenTransitions:
-			return CommandChangeScreenTransitions(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeScreenTransitions, 2>(com);
 		case Cmd::MemorizeLocation:
-			return CommandMemorizeLocation(com);
+			return CmdSetup<&Game_Interpreter::CommandMemorizeLocation, 3>(com);
 		case Cmd::SetVehicleLocation:
-			return CommandSetVehicleLocation(com);
+			return CmdSetup<&Game_Interpreter::CommandSetVehicleLocation, 5>(com);
 		case Cmd::ChangeEventLocation:
-			return CommandChangeEventLocation(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeEventLocation, 4>(com);
 		case Cmd::TradeEventLocations:
-			return CommandTradeEventLocations(com);
+			return CmdSetup<&Game_Interpreter::CommandTradeEventLocations, 2>(com);
 		case Cmd::StoreTerrainID:
-			return CommandStoreTerrainID(com);
+			return CmdSetup<&Game_Interpreter::CommandStoreTerrainID, 4>(com);
 		case Cmd::StoreEventID:
-			return CommandStoreEventID(com);
+			return CmdSetup<&Game_Interpreter::CommandStoreEventID, 4>(com);
 		case Cmd::EraseScreen:
-			return CommandEraseScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandEraseScreen, 1>(com);
 		case Cmd::ShowScreen:
-			return CommandShowScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandShowScreen, 1>(com);
 		case Cmd::TintScreen:
-			return CommandTintScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandTintScreen, 6>(com);
 		case Cmd::FlashScreen:
-			return CommandFlashScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandFlashScreen, 6>(com);
 		case Cmd::ShakeScreen:
-			return CommandShakeScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandShakeScreen, 4>(com);
 		case Cmd::WeatherEffects:
-			return CommandWeatherEffects(com);
+			return CmdSetup<&Game_Interpreter::CommandWeatherEffects, 2>(com);
 		case Cmd::ShowPicture:
-			return CommandShowPicture(com);
+			return CmdSetup<&Game_Interpreter::CommandShowPicture, 14>(com);
 		case Cmd::MovePicture:
-			return CommandMovePicture(com);
+			return CmdSetup<&Game_Interpreter::CommandMovePicture, 16>(com);
 		case Cmd::ErasePicture:
-			return CommandErasePicture(com);
+			return CmdSetup<&Game_Interpreter::CommandErasePicture, 1>(com);
 		case Cmd::PlayerVisibility:
-			return CommandPlayerVisibility(com);
+			return CmdSetup<&Game_Interpreter::CommandPlayerVisibility, 1>(com);
 		case Cmd::MoveEvent:
-			return CommandMoveEvent(com);
+			return CmdSetup<&Game_Interpreter::CommandMoveEvent, 4>(com);
 		case Cmd::MemorizeBGM:
-			return CommandMemorizeBGM(com);
+			return CmdSetup<&Game_Interpreter::CommandMemorizeBGM, 0>(com);
 		case Cmd::PlayMemorizedBGM:
-			return CommandPlayMemorizedBGM(com);
+			return CmdSetup<&Game_Interpreter::CommandPlayMemorizedBGM, 0>(com);
 		case Cmd::KeyInputProc:
-			return CommandKeyInputProc(com);
+			return CmdSetup<&Game_Interpreter::CommandKeyInputProc, 5>(com);
 		case Cmd::ChangeMapTileset:
-			return CommandChangeMapTileset(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeMapTileset, 1>(com);
 		case Cmd::ChangePBG:
-			return CommandChangePBG(com);
+			return CmdSetup<&Game_Interpreter::CommandChangePBG, 6>(com);
 		case Cmd::ChangeEncounterSteps:
-			return CommandChangeEncounterSteps(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeEncounterSteps, 1>(com);
 		case Cmd::TileSubstitution:
-			return CommandTileSubstitution(com);
+			return CmdSetup<&Game_Interpreter::CommandTileSubstitution, 3>(com);
 		case Cmd::TeleportTargets:
-			return CommandTeleportTargets(com);
+			return CmdSetup<&Game_Interpreter::CommandTeleportTargets, 6>(com);
 		case Cmd::ChangeTeleportAccess:
-			return CommandChangeTeleportAccess(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeTeleportAccess, 1>(com);
 		case Cmd::EscapeTarget:
-			return CommandEscapeTarget(com);
+			return CmdSetup<&Game_Interpreter::CommandEscapeTarget, 5>(com);
 		case Cmd::ChangeEscapeAccess:
-			return CommandChangeEscapeAccess(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeEscapeAccess, 1>(com);
 		case Cmd::ChangeSaveAccess:
-			return CommandChangeSaveAccess(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeSaveAccess, 1>(com);
 		case Cmd::ChangeMainMenuAccess:
-			return CommandChangeMainMenuAccess(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeMainMenuAccess, 1>(com);
 		case Cmd::ConditionalBranch:
-			return CommandConditionalBranch(com);
+			return CmdSetup<&Game_Interpreter::CommandConditionalBranch, 6>(com);
 		case Cmd::Label:
 			return true;
 		case Cmd::JumpToLabel:
-			return CommandJumpToLabel(com);
+			return CmdSetup<&Game_Interpreter::CommandJumpToLabel, 1>(com);
 		case Cmd::Loop:
-			return CommandLoop(com);
+			return CmdSetup<&Game_Interpreter::CommandLoop, 0>(com);
 		case Cmd::BreakLoop:
-			return CommandBreakLoop(com);
+			return CmdSetup<&Game_Interpreter::CommandBreakLoop, 0>(com);
 		case Cmd::EndLoop:
-			return CommandEndLoop(com);
+			return CmdSetup<&Game_Interpreter::CommandEndLoop, 0>(com);
 		case Cmd::EraseEvent:
-			return CommandEraseEvent(com);
+			return CmdSetup<&Game_Interpreter::CommandEraseEvent, 0>(com);
 		case Cmd::CallEvent:
-			return CommandCallEvent(com);
+			return CmdSetup<&Game_Interpreter::CommandCallEvent, 3>(com);
 		case Cmd::ReturntoTitleScreen:
-			return CommandReturnToTitleScreen(com);
+			return CmdSetup<&Game_Interpreter::CommandReturnToTitleScreen, 0>(com);
 		case Cmd::ChangeClass:
-			return CommandChangeClass(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeClass, 7>(com);
 		case Cmd::ChangeBattleCommands:
-			return CommandChangeBattleCommands(com);
+			return CmdSetup<&Game_Interpreter::CommandChangeBattleCommands, 4>(com);
 		case Cmd::ElseBranch:
-			return CommandElseBranch(com);
+			return CmdSetup<&Game_Interpreter::CommandElseBranch, 0>(com);
 		case Cmd::EndBranch:
-			return CommandEndBranch(com);
+			return CmdSetup<&Game_Interpreter::CommandEndBranch, 0>(com);
 		case Cmd::ExitGame:
-			return CommandExitGame(com);
+			return CmdSetup<&Game_Interpreter::CommandExitGame, 0>(com);
 		case Cmd::ToggleFullscreen:
-			return CommandToggleFullscreen(com);
+			return CmdSetup<&Game_Interpreter::CommandToggleFullscreen, 0>(com);
 		case Cmd::OpenVideoOptions:
-			return CommandOpenVideoOptions(com);
+			return CmdSetup<&Game_Interpreter::CommandOpenVideoOptions, 0>(com);
 		case Cmd::Maniac_GetSaveInfo:
-			return CommandManiacGetSaveInfo(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacGetSaveInfo, 12>(com);
 		case Cmd::Maniac_Load:
-			return CommandManiacLoad(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacLoad, 3>(com);
 		case Cmd::Maniac_Save:
-			return CommandManiacSave(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacSave, 3>(com);
 		case Cmd::Maniac_EndLoadProcess:
-			return CommandManiacEndLoadProcess(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacEndLoadProcess, 0>(com);
 		case Cmd::Maniac_GetMousePosition:
-			return CommandManiacGetMousePosition(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacGetMousePosition, 2>(com);
 		case Cmd::Maniac_SetMousePosition:
-			return CommandManiacSetMousePosition(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacSetMousePosition, 3>(com);
 		case Cmd::Maniac_ShowStringPicture:
-			return CommandManiacShowStringPicture(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacShowStringPicture, 23>(com);
 		case Cmd::Maniac_GetPictureInfo:
-			return CommandManiacGetPictureInfo(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacGetPictureInfo, 8>(com);
 		case Cmd::Maniac_ControlVarArray:
-			return CommandManiacControlVarArray(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacControlVarArray, 5>(com);
 		case Cmd::Maniac_KeyInputProcEx:
-			return CommandManiacKeyInputProcEx(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacKeyInputProcEx, 4>(com);
 		case Cmd::Maniac_RewriteMap:
-			return CommandManiacRewriteMap(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacRewriteMap, 9>(com);
 		case Cmd::Maniac_ControlGlobalSave:
-			return CommandManiacControlGlobalSave(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacControlGlobalSave, 6>(com);
 		case Cmd::Maniac_ChangePictureId:
-			return CommandManiacChangePictureId(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacChangePictureId, 6>(com);
 		case Cmd::Maniac_SetGameOption:
-			return CommandManiacSetGameOption(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacSetGameOption, 4>(com);
 		case Cmd::Maniac_ControlStrings:
-			return CommandManiacControlStrings(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacControlStrings, 8>(com);
 		case Cmd::Maniac_CallCommand:
-			return CommandManiacCallCommand(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacCallCommand, 6>(com);
 		case Cmd::Maniac_GetGameInfo:
-			return CommandManiacGetGameInfo(com);
+			return CmdSetup<&Game_Interpreter::CommandManiacGetGameInfo, 8>(com);
 		case Cmd::EasyRpg_SetInterpreterFlag:
-			return CommandEasyRpgSetInterpreterFlag(com);
+			return CmdSetup<&Game_Interpreter::CommandEasyRpgSetInterpreterFlag, 2>(com);
 		case Cmd::EasyRpg_ProcessJson:
-			return CommandEasyRpgProcessJson(com);
+			return CmdSetup<&Game_Interpreter::CommandEasyRpgProcessJson, 8>(com);
 		case Cmd::EasyRpg_CloneMapEvent:
-			return CommandEasyRpgCloneMapEvent(com);
+			return CmdSetup<&Game_Interpreter::CommandEasyRpgCloneMapEvent, 10>(com);
 		case Cmd::EasyRpg_DestroyMapEvent:
-			return CommandEasyRpgDestroyMapEvent(com);
+			return CmdSetup<&Game_Interpreter::CommandEasyRpgDestroyMapEvent, 2>(com);
 		default:
 			return true;
 	}
@@ -836,6 +856,14 @@ bool Game_Interpreter::OnFinishStackFrame() {
 	} else {
 		// If a called frame, or base frame of foreground interpreter, pop the stack.
 		_state.stack.pop_back();
+	}
+
+	if (is_base_frame) {
+#ifdef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+		// Individual runtime flags that may still be set will be cleared by
+		// CommandEasyRpgSetInterpreterFlag if neccessary
+		_state.easyrpg_runtime_flags.conf_override_active = false;
+#endif
 	}
 
 	return !is_base_frame;
@@ -1009,7 +1037,6 @@ bool Game_Interpreter::CommandShowChoiceOption(lcf::rpg::EventCommand const& com
 bool Game_Interpreter::CommandShowChoiceEnd(lcf::rpg::EventCommand const& /* com */) { //code 20141
 	return true;
 }
-
 
 bool Game_Interpreter::CommandInputNumber(lcf::rpg::EventCommand const& com) { // code 10150
 	if (!Game_Message::CanShowMessage(main_flag)) {
@@ -1514,7 +1541,7 @@ std::vector<Game_Actor*> Game_Interpreter::GetActors(int mode, int id) {
 	return actors;
 }
 
-Game_Character* Game_Interpreter::GetCharacter(int event_id, StringView origin) const {
+Game_Character* Game_Interpreter::GetCharacter(int event_id, std::string_view origin) const {
 	if (event_id == Game_Character::CharThisEvent) {
 		event_id = GetThisEventId();
 		// Is a common event
@@ -2024,17 +2051,17 @@ bool Game_Interpreter::CommandEndEventProcessing(lcf::rpg::EventCommand const& /
 	return true;
 }
 
-bool Game_Interpreter::CommandComment(const lcf::rpg::EventCommand &com) {
+std::optional<bool> Game_Interpreter::HandleDynRpgScript(const lcf::rpg::EventCommand& com) {
 	if (Player::IsPatchDynRpg() || Player::HasEasyRpgExtensions()) {
 		if (com.string.empty() || com.string[0] != '@') {
 			// Not a DynRPG command
-			return true;
+			return {};
 		}
 
 		if (!Player::IsPatchDynRpg() && Player::HasEasyRpgExtensions()) {
 			// Only accept commands starting with @easyrpg_
-			if (!StringView(com.string).starts_with("@easyrpg_")) {
-				return true;
+			if (!StartsWith(com.string, "@easyrpg_")) {
+				return {};
 			}
 		}
 
@@ -2043,6 +2070,7 @@ bool Game_Interpreter::CommandComment(const lcf::rpg::EventCommand &com) {
 		auto& index = frame.current_command;
 
 		std::string command = ToString(com.string);
+
 		// Concat everything that is not another command or a new comment block
 		for (size_t i = index + 1; i < list.size(); ++i) {
 			const auto& cmd = list[i];
@@ -2056,16 +2084,28 @@ bool Game_Interpreter::CommandComment(const lcf::rpg::EventCommand &com) {
 
 		return Main_Data::game_dynrpg->Invoke(command, this);
 	}
+	return {};
+}
 
-
+std::optional<bool> Game_Interpreter::HandleDestinyScript(const lcf::rpg::EventCommand& com) {
 	// DestinyScript
 	if (Player::IsPatchDestiny()) {
 		if (com.string.empty() || com.string[0] != '$') {
 			// Not a DestinyScript
-			return true;
+			return {};
 		}
 
 		return Main_Data::game_destiny->Main(GetFrame());
+	}
+	return {};
+}
+
+bool Game_Interpreter::CommandComment(const lcf::rpg::EventCommand &com) {
+	if (auto handled = HandleDynRpgScript(com); handled.has_value()) {
+		return handled.value();
+	}
+	if (auto handled = HandleDestinyScript(com); handled.has_value()) {
+		return handled.value();
 	}
 
 	return true;
@@ -2127,16 +2167,8 @@ bool Game_Interpreter::CommandChangeSpriteAssociation(lcf::rpg::EventCommand con
 	}
 
 	auto file = ToString(CommandStringOrVariableBitfield(com, 3, 1, 4));
-
-	int idx = 0;
-	if (com.parameters.size() > 1) {
-		idx = ValueOrVariableBitfield(com, 3, 2, 1);
-	}
-
-	bool transparent = false;
-	if (com.parameters.size() > 2) {
-		transparent = com.parameters[2] != 0;
-	}
+	int idx = ValueOrVariableBitfield(com, 3, 2, 1);
+	bool transparent = com.parameters[2] != 0;
 
 	actor->SetSprite(file, idx, transparent);
 	Main_Data::game_player->ResetGraphic();
@@ -2146,15 +2178,14 @@ bool Game_Interpreter::CommandChangeSpriteAssociation(lcf::rpg::EventCommand con
 bool Game_Interpreter::CommandChangeActorFace(lcf::rpg::EventCommand const& com) { // code 10640
 	int id = ValueOrVariableBitfield(com, 2, 0, 0);
 	Game_Actor* actor = Main_Data::game_actors->GetActor(id);
-
 	if (!actor) {
 		Output::Warning("CommandChangeActorFace: Invalid actor ID {}", id);
 		return true;
 	}
 
 	actor->SetFace(
-			ToString(CommandStringOrVariableBitfield(com, 2, 1, 3)),
-			ValueOrVariableBitfield(com, 2, 2, 1));
+		ToString(CommandStringOrVariableBitfield(com, 2, 1, 3)),
+		ValueOrVariableBitfield(com, 2, 2, 1));
 	return true;
 }
 
@@ -2727,7 +2758,7 @@ namespace PicPointerPatch {
 
 bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { // code 11110
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -2765,6 +2796,11 @@ bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { /
 	}
 
 	if (param_size > 16 && (Player::IsRPG2k3ECommands() || Player::IsPatchManiac())) {
+		if (param_size < 30) {
+			// Ensure correct size
+			return CmdSetup<&Game_Interpreter::CommandShowPicture, 30>(com);
+		}
+
 		// Handling of RPG2k3 1.12 chunks
 		if (Player::IsPatchManiac()) {
 			pic_id = ValueOrVariableBitfield(com.parameters[17], 0, pic_id);
@@ -2872,7 +2908,7 @@ bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { /
 
 bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { // code 11120
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -2894,12 +2930,45 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 	params.effect_power = com.parameters[13];
 	params.duration = com.parameters[14];
 
-	bool wait = com.parameters[15] != 0;
+	struct {
+		bool wait = false;
+		// Starting from here are Maniac Extensions
+		// TODO: The extensions are not implemented
+		bool relative = false; // new position is relative to current
+		// when true these values preserve the values from a previous Show/MovePicture call
+		bool preserve_tone = false;
+		bool preserve_effect_mode = false;
+		bool preserve_blend_mode = false;
+		bool preserve_flip = false;
+		bool preserve_duration = false;
+		// Coordinates consider the scaled picture (when the origin is not centered)
+		bool position_scaled = false;
+	} options;
+
+	if (Player::IsPatchManiac()) {
+		int opts = com.parameters[15];
+		options.wait = (opts & (1 << 0)) > 0;
+		options.relative = (opts & (1 << 1)) > 0;
+		options.preserve_tone = (opts & (1 << 2)) > 0;
+		options.preserve_effect_mode = (opts & (1 << 3)) > 0;
+		options.preserve_blend_mode = (opts & (1 << 4)) > 0;
+		options.preserve_flip = (opts & (1 << 5)) > 0;
+		options.preserve_duration = (opts & (1 << 6)) > 0;
+		// Bit 7 is unused
+		options.position_scaled = (opts & (1 << 8)) > 0;
+	} else {
+		options.wait = com.parameters[15] != 0;
+	}
 
 	size_t param_size = com.parameters.size();
 
 	if (Player::IsRPG2k() || Player::IsRPG2k3E() || Player::IsPatchManiac()) {
 		if (param_size > 17 && (Player::IsRPG2k3ECommands() || Player::IsPatchManiac())) {
+			if (param_size < 22) {
+				// Ensure correct size
+				return CmdSetup<&Game_Interpreter::CommandMovePicture, 22>(com);
+			}
+
 			// Handling of RPG2k3 1.12 chunks
 			// Maniac Patch uses the upper bits for "wait is variable", mask it away
 			pic_id = ValueOrVariable(ManiacBitmask(com.parameters[17], 0xFF), pic_id);
@@ -2916,13 +2985,15 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 			}
 
 			params.magnify_width = ValueOrVariableBitfield(com.parameters[20], 0, params.magnify_width);
-			if (Player::IsPatchManiac() && com.parameters.size() > 18 && com.parameters[20] >= 16) {
+
+			if (Player::IsPatchManiac() && com.parameters.size() > 20 && com.parameters[20] >= 16) {
 				// The >= 16 check is needed because this bit is set when independent width/height scaling is used
 				// Since version 240423, Maniacs supports width/height scaling for special effects pictures.
 				params.magnify_height = ValueOrVariableBitfield((com.parameters[20] >> 1), 1, com.parameters[18]);
 			} else {
 				params.magnify_height = params.magnify_width;
 			}
+
 			params.top_trans = ValueOrVariable(com.parameters[21], params.top_trans);
 		}
 
@@ -2984,7 +3055,7 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 		}
 	}
 
-	if (wait)
+	if (options.wait)
 		SetupWait(params.duration);
 
 	return true;
@@ -2992,7 +3063,7 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 
 bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { // code 11130
 	// Older versions of RPG_RT block pictures when message active.
-	if (!Player::IsEnglish() && !Player::game_config.patch_unlock_pics.Get() && Game_Message::IsMessageActive()) {
+	if (!Player::IsEnglish() && !Player::IsPatchUnlockPics() && Game_Message::IsMessageActive()) {
 		return false;
 	}
 
@@ -3002,7 +3073,7 @@ bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { 
 		// Handling of RPG2k3 1.12 chunks
 		int id_type = com.parameters[1];
 
-		int pic_id_max;
+		int pic_id_max = 0;
 		switch (id_type) {
 			case 0:
 				// Erase single picture specified by constant
@@ -3013,7 +3084,9 @@ bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { 
 				break;
 			case 2:
 				// Erase [Arg0, Arg2]
-				pic_id_max = com.parameters[2];
+				if (com.parameters.size() > 2) {
+					pic_id_max = com.parameters[2];
+				}
 				break;
 			case 3:
 				// Erase [V[Arg0], V[Arg2]]
@@ -3021,7 +3094,9 @@ bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { 
 					return true;
 				}
 				pic_id = Main_Data::game_variables->Get(pic_id);
-				pic_id_max = Main_Data::game_variables->Get(com.parameters[2]);
+				if (com.parameters.size() > 2) {
+					pic_id_max = Main_Data::game_variables->Get(com.parameters[2]);
+				}
 				break;
 			case 4:
 				// Erase single picture referenced by variable indirect
@@ -3264,11 +3339,11 @@ bool Game_Interpreter::CommandKeyInputProc(lcf::rpg::EventCommand const& com) { 
 		} else {
 			// Since RPG2k3 1.05
 			// Support for RPG2k >=1.50 games imported into RPG2k3
-			_keyinput.keys[Keys::eShift] = com.parameters[5] != 0;
-			_keyinput.keys[Keys::eDown] = com.parameters[6] != 0;
-			_keyinput.keys[Keys::eLeft] = com.parameters[7] != 0;
-			_keyinput.keys[Keys::eRight] = com.parameters[8] != 0;
-			_keyinput.keys[Keys::eUp] = com.parameters[9] != 0;
+			_keyinput.keys[Keys::eShift] = check_key(5u);
+			_keyinput.keys[Keys::eDown] = check_key(6u);
+			_keyinput.keys[Keys::eLeft] = check_key(7u);
+			_keyinput.keys[Keys::eRight] = check_key(8u);
+			_keyinput.keys[Keys::eUp] = check_key(9u);
 		}
 	}
 
@@ -3502,6 +3577,7 @@ bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& co
 		case 0:
 			// Is actor in party
 			result = Main_Data::game_party->IsActorInParty(actor_id);
+			RuntimePatches::EXPlus::StoreActorPosition(actor_id);
 			break;
 		case 1:
 			// Name
@@ -3658,8 +3734,8 @@ bool Game_Interpreter::CommandConditionalBranch(lcf::rpg::EventCommand const& co
 			int ignoreCase = com.parameters[4] >> 8 & 1;
 
 			std::string str_param = ToString(com.string);
-			StringView str_l = Main_Data::game_strings->GetWithMode(str_param, modes[0]+1, com.parameters[2], *Main_Data::game_variables);
-			StringView str_r = Main_Data::game_strings->GetWithMode(str_param, modes[1], com.parameters[3], *Main_Data::game_variables);
+			std::string_view str_l = Main_Data::game_strings->GetWithMode(str_param, modes[0]+1, com.parameters[2], *Main_Data::game_variables);
+			std::string_view str_r = Main_Data::game_strings->GetWithMode(str_param, modes[1], com.parameters[3], *Main_Data::game_variables);
 			result = ManiacPatch::CheckString(str_l, str_r, op, ignoreCase);
 		}
 		break;
@@ -3700,7 +3776,7 @@ bool Game_Interpreter::CommandJumpToLabel(lcf::rpg::EventCommand const& com) { /
 	for (int idx = 0; (size_t)idx < list.size(); idx++) {
 		if (static_cast<Cmd>(list[idx].code) != Cmd::Label)
 			continue;
-		if (list[idx].parameters[0] != label_id)
+		if (list[idx].parameters.empty() || list[idx].parameters[0] != label_id)
 			continue;
 		index = idx;
 		break;
@@ -3938,7 +4014,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 			return true;
 		}
 
-		Push(common_event);
+		Push<ExecutionType::Call>(common_event);
 
 		return true;
 	}
@@ -3966,7 +4042,7 @@ bool Game_Interpreter::CommandCallEvent(lcf::rpg::EventCommand const& com) { // 
 		return true;
 	}
 
-	Push(page->event_commands, event->GetId(), false, page->ID);
+	Push<ExecutionType::Call, EventType::MapEvent>(page->event_commands, event->GetId(), page->ID);
 
 	return true;
 }
@@ -4058,6 +4134,12 @@ bool Game_Interpreter::CommandToggleFullscreen(lcf::rpg::EventCommand const& /* 
 		return true;
 	}
 
+	auto cfg = DisplayUi->GetConfig();
+	if (!cfg.fullscreen.IsOptionVisible() || cfg.fullscreen.IsLocked()) {
+		Output::Debug("ToggleFullscreen: Not supported on this platform");
+		return true;
+	}
+
 	DisplayUi->ToggleFullscreen();
 	return true;
 }
@@ -4099,10 +4181,26 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 			Main_Data::game_variables->Set(var, Game_Map::GetTilesX());
 			Main_Data::game_variables->Set(var + 1, Game_Map::GetTilesY());
 			break;
-		case 1: // Get tile info
-			// FIXME: figure out how 'Tile Info' works
-			Output::Warning("GetGameInfo: Option 'Tile Info' not implemented.");
+		case 1: { // Get tile info
+			var = com.parameters[7];
+
+			int32_t tile_layer = com.parameters[2]; // 0: Lower || 1: Upper
+			Rect tile_coords;
+
+			tile_coords.x = ValueOrVariableBitfield(com.parameters[0], 1, com.parameters[3]);
+			tile_coords.y = ValueOrVariableBitfield(com.parameters[0], 2, com.parameters[4]);
+			tile_coords.width = ValueOrVariableBitfield(com.parameters[0], 3, com.parameters[5]);
+			tile_coords.height = ValueOrVariableBitfield(com.parameters[0], 4, com.parameters[6]);
+
+			if (tile_coords.width <= 0 || tile_coords.height <= 0) return true;
+
+			auto tiles = Game_Map::GetTilesIdAt(tile_coords, tile_layer);
+
+			for (int i = 0; i < tile_coords.width * tile_coords.height; i++) {
+				Main_Data::game_variables->Set(var + i, tiles[i]);
+			}
 			break;
+		}
 		case 2: // Get window size
 			Main_Data::game_variables->Set(var, Player::screen_width);
 			Main_Data::game_variables->Set(var + 1, Player::screen_height);
@@ -4112,8 +4210,30 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 			Output::Warning("GetGameInfo: Option 'Pixel Info' not implemented.");
 			break;
 		case 4: // Get command interpreter state
-			// FIXME: figure out how 'command interpreter state' works
-			Output::Warning("GetGameInfo: Option 'Command Interpreter State' not implemented.");
+		{
+			// Parameter "Nest" in the English version of Maniacs
+			// This value specifies how far you'd want to go back the stack
+			int peek = ValueOrVariableBitfield(com.parameters[0], 2, com.parameters[4]);
+
+			//First set everything to '0'
+			Main_Data::game_variables->SetRange(var, var + 4, 0);
+
+			int stack_no = _state.stack.size() - peek;
+			if (stack_no > 0) {
+				auto frame = &_state.stack[stack_no - 1];
+
+				// Note: It looks like for Battles, Maniacs doesn't give out any detailed interpreter
+				// information via this command (only the current command line: frame->current_command)
+				// The others are implemented here nonetheless for consistency.
+				// (This is true for both the normal "Troop" events & the new "Battle Start"/"Battle Parallel" execution types)
+
+				Main_Data::game_variables->Set(var, static_cast<int>(ManiacEventType(*frame)));
+				Main_Data::game_variables->Set(var + 1, frame->maniac_event_id);
+				Main_Data::game_variables->Set(var + 2, frame->maniac_event_page_id);
+				Main_Data::game_variables->Set(var + 3, static_cast<int>(ManiacExecutionType(*frame)));
+				Main_Data::game_variables->Set(var + 4, frame->current_command + 1);
+			}
+		}
 			break;
 		case 5: // Get tileset ID
 			Main_Data::game_variables->Set(var, Game_Map::GetChipset());
@@ -4163,7 +4283,7 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 							Main_Data::game_variables->Set(com.parameters[3], 0);
 							break;
 					}
-					Main_Data::game_strings->Asg(var, StringView(character->GetSpriteName()));
+					Main_Data::game_strings->Asg(var, std::string_view(character->GetSpriteName()));
 					Main_Data::game_variables->Set(com.parameters[3], character->GetSpriteIndex());
 					break;
 				} else {
@@ -4171,19 +4291,19 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 					switch (event_id) {
 						case Game_Character::CharPlayer:
 							// Return dynamic player sprite
-							Main_Data::game_strings->Asg(var, StringView(character->GetSpriteName()));
+							Main_Data::game_strings->Asg(var, std::string_view(character->GetSpriteName()));
 							Main_Data::game_variables->Set(com.parameters[3], character->GetSpriteIndex());
 							break;
 						case Game_Character::CharBoat:
-							Main_Data::game_strings->Asg(var, StringView(lcf::Data::system.boat_name));
+							Main_Data::game_strings->Asg(var, std::string_view(lcf::Data::system.boat_name));
 							Main_Data::game_variables->Set(com.parameters[3], lcf::Data::system.boat_index);
 							break;
 						case Game_Character::CharShip:
-							Main_Data::game_strings->Asg(var, StringView(lcf::Data::system.ship_name));
+							Main_Data::game_strings->Asg(var, std::string_view(lcf::Data::system.ship_name));
 							Main_Data::game_variables->Set(com.parameters[3], lcf::Data::system.ship_index);
 							break;
 						case Game_Character::CharAirship:
-							Main_Data::game_strings->Asg(var, StringView(lcf::Data::system.airship_name));
+							Main_Data::game_strings->Asg(var, std::string_view(lcf::Data::system.airship_name));
 							Main_Data::game_variables->Set(com.parameters[3], lcf::Data::system.airship_index);
 							break;
 						default: {
@@ -4194,7 +4314,7 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 								Main_Data::game_strings->Asg(var, "");
 								Main_Data::game_variables->Set(com.parameters[3], 0);
 							} else {
-								Main_Data::game_strings->Asg(var, StringView(page->character_name));
+								Main_Data::game_strings->Asg(var, std::string_view(page->character_name));
 								Main_Data::game_variables->Set(com.parameters[3], page->character_index);
 							}
 						}
@@ -4246,7 +4366,6 @@ bool Game_Interpreter::CommandManiacGetGameInfo(lcf::rpg::EventCommand const& co
 
 	return true;
 }
-
 
 bool Game_Interpreter::CommandManiacGetSaveInfo(lcf::rpg::EventCommand const& com) {
 	if (!Player::IsPatchManiac()) {
@@ -4740,7 +4859,11 @@ bool Game_Interpreter::CommandManiacKeyInputProcEx(lcf::rpg::EventCommand const&
 		}
 	} else if (operation == 2) {
 		int key_id = ValueOrVariable(com.parameters[2], com.parameters[3]);
-		bool key_state = ManiacPatch::GetKeyState(key_id);
+		auto key = RuntimePatches::VirtualKeys::VirtualKeyToInputKey(key_id);
+		if (key == Input::Keys::NONE) {
+			Output::Debug("Maniac KeyInputProcEx: Unsupported keycode {}", key_id);
+		}
+		bool key_state = Input::IsRawKeyPressed(key);
 		Main_Data::game_variables->Set(start_var_id, key_state ? 1 : 0);
 	} else {
 		Output::Warning("Maniac KeyInputProcEx: Joypad not supported");
@@ -4757,7 +4880,7 @@ bool Game_Interpreter::CommandManiacRewriteMap(lcf::rpg::EventCommand const& com
 	}
 
 	int mode = com.parameters[0];
-	bool is_replace_range = com.parameters[1] != 0;
+	//bool is_replace_range = com.parameters[1] != 0; FIXME not implemented
 	bool is_upper_layer = com.parameters[2] != 0;
 
 	int tile_index = ValueOrVariableBitfield(mode, 0, com.parameters[3]);
@@ -4796,91 +4919,21 @@ bool Game_Interpreter::CommandManiacControlGlobalSave(lcf::rpg::EventCommand con
 
 	int operation = com.parameters[0];
 
-	auto load_global_save = [&]() {
-		Main_Data::global_save_opened = true;
-
-		// Load
-		auto lgs = FileFinder::Save().OpenFile("Save.lgs");
-		if (!lgs) {
-			return;
-		}
-
-		lcf::LcfReader reader(lgs);
-		std::string header;
-		reader.ReadString(header, reader.ReadInt());
-		if (header.length() != 13 || header != "LcfGlobalSave") {
-			Output::Debug("This is not a valid global save.");
-			return;
-		}
-
-		lcf::LcfReader::Chunk chunk;
-
-		while (!reader.Eof()) {
-			chunk.ID = reader.ReadInt();
-			chunk.length = reader.ReadInt();
-			switch (chunk.ID) {
-				case 1: {
-					Game_Switches::Switches_t switches;
-					reader.Read(switches, chunk.length);
-					Main_Data::game_switches_global->SetData(std::move(switches));
-					break;
-				}
-				case 2: {
-					Game_Variables::Variables_t variables;
-					reader.Read(variables, chunk.length);
-					Main_Data::game_variables_global->SetData(std::move(variables));
-					break;
-				}
-				default:
-					reader.Skip(chunk, "CommandManiacControlGlobalSave");
-			}
-		}
-	};
-
 	if (operation == 0) {
-		// Open
-		load_global_save();
+		// Open: Fill Global Save with data from Save.lgs
+		// Does nothing when already opened
+		ManiacPatch::GlobalSave::Load();
 	} else if (operation == 1) {
 		// Close
-		Main_Data::global_save_opened = false;
+		// Marks the file as closed and does nothing
+		ManiacPatch::GlobalSave::Close();
 	} else if (operation == 2 || operation == 3) {
 		// 2: Save (write to file)
 		// 3: Save and Close
-		if (!Main_Data::global_save_opened) {
-			return true;
-		}
-
-		auto savelgs_name = FileFinder::Save().FindFile("Save.lgs");
-		if (savelgs_name.empty()) {
-			savelgs_name = "Save.lgs";
-		}
-
-		auto lgs_out = FileFinder::Save().OpenOutputStream(savelgs_name);
-		if (!lgs_out) {
-			Output::Warning("Maniac ControlGlobalSave: Saving failed");
-			return true;
-		}
-
-		lcf::LcfWriter writer(lgs_out, lcf::EngineVersion::e2k3);
-		writer.WriteInt(13);
-		const std::string header = "LcfGlobalSave";
-		writer.Write(header);
-		writer.WriteInt(1);
-		writer.WriteInt(Main_Data::game_switches_global->GetSize());
-		writer.Write(Main_Data::game_switches_global->GetData());
-		writer.WriteInt(2);
-		writer.WriteInt(Main_Data::game_variables_global->GetSize() * sizeof(int32_t));
-		writer.Write(Main_Data::game_variables_global->GetData());
-
-		AsyncHandler::SaveFilesystem();
-
-		if (operation == 3) {
-			Main_Data::global_save_opened = false;
-		}
+		ManiacPatch::GlobalSave::Save(operation == 3);
 	} else if (operation == 4 || operation == 5) {
-		if (!Main_Data::global_save_opened) {
-			load_global_save();
-		}
+		// Reload the file when it was already closed
+		ManiacPatch::GlobalSave::Load();
 
 		int type = com.parameters[2];
 		int game_state_idx = ValueOrVariableBitfield(com.parameters[1], 0, com.parameters[3]);
@@ -5118,7 +5171,7 @@ bool Game_Interpreter::CommandManiacControlStrings(lcf::rpg::EventCommand const&
 		case 12: //File (file) <fn(string filename, int encode)>
 		{
 			// maniacs does not like a file extension
-			StringView filename = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
+			std::string_view filename = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
 			// args[1] is the encoding... 0 for ansi, 1 for utf8
 			bool do_yield;
 			result = Game_Strings::FromFile(filename, args[1], do_yield);
@@ -5178,7 +5231,7 @@ bool Game_Interpreter::CommandManiacControlStrings(lcf::rpg::EventCommand const&
 		break;
 	case 4: //inStr <fn(string text, int var_id, int begin)> FIXME: takes hex?
 	{
-		StringView search = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
+		std::string_view search = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
 		args[1] = ValueOrVariable(modes[1], args[1]); // not sure this is necessary but better safe
 		args[2] = ValueOrVariable(modes[2], args[2]);
 
@@ -5188,7 +5241,7 @@ bool Game_Interpreter::CommandManiacControlStrings(lcf::rpg::EventCommand const&
 	}
 	case 5: //split <fn(string text, int str_id, int var_id)> takes hex
 	{
-		StringView delimiter = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
+		std::string_view delimiter = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
 		args[1] = ValueOrVariable(modes[1], args[1]);
 		args[2] = ValueOrVariable(modes[2], args[2]);
 
@@ -5198,7 +5251,7 @@ bool Game_Interpreter::CommandManiacControlStrings(lcf::rpg::EventCommand const&
 	}
 	case 7: //toFile <fn(string filename, int encode)>  takes hex
 	{
-		StringView filename = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
+		std::string_view filename = Main_Data::game_strings->GetWithMode(str_param, modes[0], args[0], *Main_Data::game_variables);
 		args[1] = ValueOrVariable(modes[1], args[1]);
 
 		Main_Data::game_strings->ToFile(str_params, ToString(filename), args[1]);
@@ -5243,27 +5296,79 @@ bool Game_Interpreter::CommandManiacCallCommand(lcf::rpg::EventCommand const& co
 		return true;
 	}
 
+	enum class ProcessingMode {
+		Constant = 0, // 0 and 1: Parameters read from variables
+		Variable = 1,
+		//VariableIndirect = 2, // Somehow not implemented by ManiacPatch
+		Inline = 3, // Parameters are directly provided by the command
+		Expression = 4 // Like 3, but the parameters are calculated from expressions
+	};
+
+	std::vector<int32_t> values;
+
+	// Create command with basic parameters
 	lcf::rpg::EventCommand cmd;
 	cmd.code = ValueOrVariableBitfield(com.parameters[0], 0, com.parameters[1]);
 
 	cmd.string = lcf::DBString(CommandStringOrVariableBitfield(com, 0, 3, 4));
 
-	int arr_begin = ValueOrVariableBitfield(com.parameters[0], 1, com.parameters[2]);
-	int arr_length = ValueOrVariableBitfield(com.parameters[0], 2, com.parameters[3]);
+	// Determine processing mode
+	auto processing_mode = static_cast<ProcessingMode>((com.parameters[0] >> 4) & 0b1111);
 
-	std::vector<int32_t> output_args;
-	if (arr_length > 0) {
-		output_args.reserve(arr_length);
-		for (int i = 0; i < arr_length; ++i) {
-			output_args.push_back(Main_Data::game_variables->Get(arr_begin + i));
+	switch (processing_mode) {
+	case ProcessingMode::Constant:
+	case ProcessingMode::Variable: {
+		int start_index = ValueOrVariable(static_cast<int>(processing_mode), com.parameters[2]);
+		int length = ValueOrVariableBitfield(com.parameters[0], 2, com.parameters[3]);
+
+		for (int i = 0; i < length; ++i) {
+			values.push_back(Main_Data::game_variables->Get(start_index + i));
 		}
+		break;
+	}
+	case ProcessingMode::Inline: {
+		int value_index = 5; // Start of the values
+		int mode_index = com.parameters[2]; // Mode of the values
+		int length = com.parameters[3];
+
+		for (int i = 0; i < length; ++i) {
+			// The mode is the typical 4 bit packing
+			// Always 4 modes (16 bit) are packing into one parameter
+			// Then the mode_index increments
+			if (i != 0 && i % 4 == 0) {
+				++mode_index;
+			}
+
+			values.push_back(ValueOrVariableBitfield(com, mode_index, i % 4, value_index + i));
+		}
+		break;
+	}
+	case ProcessingMode::Expression: {
+		values = ManiacPatch::ParseExpressions(MakeSpan(com.parameters).subspan(5), *this);
+		break;
+	}
+	default:
+		Output::Warning("Call Command: Unsupported Processing Mode: {}", static_cast<int>(processing_mode));
+		return true;
 	}
 
-	cmd.parameters = lcf::DBArray<int32_t>(output_args.begin(), output_args.end());
+	// Finalize command parameters
+	cmd.parameters = lcf::DBArray<int32_t>(values.begin(), values.end());
+
+	// Debug output
+	/*Output::Warning("Processing mode: {}", static_cast<int>(processing_mode));
+	Output::Warning("Command code: {}", cmd.code);
+	Output::Warning("Command string: {}", cmd.string);
+	std::string params_str;
+	for (const auto& param : values) {
+		params_str += " " + std::to_string(param);
+	}
+	Output::Warning("Command parameters:{}", params_str);
+	Output::Info("--------------------\n");*/
 
 	// Our implementation pushes a new frame containing the command instead of invoking it directly.
 	// This is incompatible to Maniacs but has a better compatibility with our code.
-	Push({ cmd }, GetCurrentEventId(), false); //FIXME: add some new flag, so the interpreter debug view (window_interpreter) can differentiate this frame from normal ones
+	Push<ExecutionType::Eval, EventType::None>({ cmd }, GetCurrentEventId(), 0);
 
 	return true;
 }
@@ -5273,25 +5378,102 @@ bool Game_Interpreter::CommandEasyRpgSetInterpreterFlag(lcf::rpg::EventCommand c
 		return true;
 	}
 
-	// FIXME: Store them as part of the interpreter state
+#ifndef ENABLE_DYNAMIC_INTERPRETER_CONFIG
+	Output::Warning("CommandEasyRpgSetInterpreterFlag: Not supported on this platform");
+	return true;
+#else
+	constexpr std::array<std::pair<const char*, int>, 9> config_names = {{
+		{ "destiny",          1 },
+		{ "dynrpg",           2 },
+		{ "maniac",           3 },
+		{ "common-this",      4 },
+		{ "pic-unlock",       5 },
+		{ "key-patch",        6 },
+		{ "rpg2k3-cmds",      7 },
+		{ "rpg2k3-commands",  7 },
+		{ "rpg2k-battle",     8 }
+	}};
 
 	std::string flag_name = Utils::LowerCase(ToString(com.string));
 	int flag_value = ValueOrVariable(com.parameters[0], com.parameters[1]);
+	int flag_id = 0;
 
-	if (flag_name == "dynrpg")
-		Player::game_config.patch_dynrpg.Set(flag_value);
-	if (flag_name == "maniac")
-		Player::game_config.patch_maniac.Set(flag_value);
-	if (flag_name == "common-this")
-		Player::game_config.patch_common_this_event.Set(flag_value);
-	if (flag_name == "pic-unlock")
-		Player::game_config.patch_unlock_pics.Set(flag_value);
-	if (flag_name == "key-patch")
-		Player::game_config.patch_key_patch.Set(flag_value);
-	if (flag_name == "rpg2k3-cmds" || flag_name == "rpg2k3-commands")
-		Player::game_config.patch_rpg2k3_commands.Set(flag_value);
-	if (flag_name == "rpg2k-battle")
-		lcf::Data::system.easyrpg_use_rpg2k_battle_system = flag_value;
+	if (flag_name.empty() && com.parameters.size() > 2) {
+		flag_id = com.parameters[2];
+	} else {
+		auto it = std::find_if(config_names.begin(), config_names.end(), [&flag_name](auto& p) { return p.first == flag_name; });
+		if (it != config_names.end()) {
+			flag_id = it->second;
+		}
+	}
+
+	// Clear any inactive flags that might be left over from a previous InterpreterFlag command
+	if (!_state.easyrpg_runtime_flags.conf_override_active) {
+		_state.easyrpg_runtime_flags.flags.fill(false);
+	}
+
+	switch (flag_id) {
+		case 1:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_destiny_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_destiny_off = true;
+			}
+			break;
+		case 2:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_dynrpg_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_dynrpg_off = true;
+			}
+			break;
+		case 3:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_maniac_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_maniac_off = true;
+			}
+			break;
+		case 4:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_common_this_event_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_common_this_event_off = true;
+			}
+			break;
+		case 5:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_unlock_pics_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_unlock_pics_off = true;
+			}
+			break;
+		case 6:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_keypatch_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_keypatch_off = true;
+			}
+			break;
+		case 7:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.patch_rpg2k3_cmds_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.patch_rpg2k3_cmds_off = true;
+			}
+			break;
+		case 8:
+			if (flag_value) {
+				_state.easyrpg_runtime_flags.use_rpg2k_battle_system_on = true;
+			} else {
+				_state.easyrpg_runtime_flags.use_rpg2k_battle_system_off = true;
+			}
+			break;
+		default:
+			return true;
+	}
+	_state.easyrpg_runtime_flags.conf_override_active = true;
+#endif
 
 	return true;
 }
@@ -5306,16 +5488,82 @@ bool Game_Interpreter::CommandEasyRpgProcessJson(lcf::rpg::EventCommand const& c
 	return true;
 #else
 
+	// Helper lambda for getting values from variables
+	auto get_var_value = [](int var_type, int var_id) -> std::string {
+		switch (var_type) {
+		case 0: // Switch
+			return std::to_string(Main_Data::game_switches->Get(var_id));
+		case 1: // Variable
+			return std::to_string(Main_Data::game_variables->Get(var_id));
+		case 2: // String
+			return ToString(Main_Data::game_strings->Get(var_id));
+		default:
+			Output::Warning("CommandEasyRpgProcessJson: Unsupported var_type {}", var_type);
+			return {};
+		}
+		};
+
+	// Helper lambda for setting values to variables
+	auto set_var_value = [](int var_type, int var_id, const std::string& value) -> bool {
+		switch (var_type) {
+		case 0: // Switch
+			Main_Data::game_switches->Set(var_id, atoi(value.c_str()) != 0);
+			break;
+		case 1: // Variable
+			Main_Data::game_variables->Set(var_id, atoi(value.c_str()));
+			break;
+		case 2: // String
+			Main_Data::game_strings->Asg(var_id, value);
+			break;
+		default:
+			Output::Warning("CommandEasyRpgProcessJson: Unsupported var_type {}", var_type);
+			return false;
+		}
+		return true;
+		};
+
 	int operation = ValueOrVariable(com.parameters[0], com.parameters[1]);
-	int source_var_id = ValueOrVariable(com.parameters[2], com.parameters[3]);
+
+	json* json_data = nullptr;
+	std::optional<json> json_data_imm;
+
+	int source_var_id = -1;
+
+	int pos = 0;
+	std::string json_path = Main_Data::game_strings->GetWithModeAndPos(com.string, com.parameters[8], com.parameters[9], pos, *Main_Data::game_variables);
+
+	if (com.parameters[2] == 0) {
+		std::string json_str = Main_Data::game_strings->GetWithModeAndPos(com.string, com.parameters[2], com.parameters[3], pos, *Main_Data::game_variables);
+		json_data_imm = Json_Helper::Parse(json_str);
+		if (json_data_imm) {
+			json_data = &*json_data_imm;
+		} else {
+			Output::Warning("JSON Parse error for {}", json_str);
+			return true;
+		}
+	} else {
+		source_var_id = ValueOrVariable(com.parameters[2] - 1, com.parameters[3]);
+		json_data = Main_Data::game_strings->ParseJson(source_var_id);
+
+		if (!json_data) {
+			Output::Warning("JSON Parse error for {}", Main_Data::game_strings->Get(source_var_id));
+			return true;
+		}
+	}
+
 	int target_var_type = ValueOrVariable(com.parameters[4], com.parameters[5]);
 	int target_var_id = ValueOrVariable(com.parameters[6], com.parameters[7]);
 
-	std::string json_path = ToString(CommandStringOrVariable(com, 8, 9));
-	auto* json_data = Main_Data::game_strings->ParseJson(source_var_id);
+	int flags = com.parameters[10];
+	bool pretty_print = (flags & 4) == 4;
 
-	if (!json_data) {
-		Output::Warning("JSON Parse error for {}", Main_Data::game_strings->Get(source_var_id));
+	if ((flags & 1) == 1) { // parse command codes
+		json_path = Game_Strings::Extract(json_path, false);
+	} else if ((flags & 2) == 2) { // parse command codes, numbers as hex
+		json_path = Game_Strings::Extract(json_path, true);
+	}
+
+	if (!Json_Helper::CheckJsonPointer(json_path)) {
 		return true;
 	}
 
@@ -5326,52 +5574,131 @@ bool Game_Interpreter::CommandEasyRpgProcessJson(lcf::rpg::EventCommand const& c
 
 	std::optional<std::string> result;
 
-	if (operation == 0) { // Get operation: Extract a value from JSON data
+	switch (operation) {
+	case 0: { // Get operation: Extract a value from JSON data
 		result = Json_Helper::GetValue(*json_data, json_path);
-
 		if (result) {
-			switch (target_var_type) {
-			case 0: // Switch
-				Main_Data::game_switches->Set(target_var_id, atoi(result->c_str()) != 0);
-				break;
-			case 1: // Variable
-				Main_Data::game_variables->Set(target_var_id, atoi(result->c_str()));
-				break;
-			case 2: // String
-				Main_Data::game_strings->Asg({ target_var_id }, *result);
-				break;
-			default:
-				Output::Warning("CommandEasyRpgProcessJson: Unsupported target_var_type {}", operation);
-				return true;
-			}
+			set_var_value(target_var_type, target_var_id, *result);
 		}
+		break;
 	}
-	else if (operation == 1) { // Set operation: Update JSON data with a new value
-		std::string new_value;
-
-		switch (target_var_type) {
-		case 0: // Switch
-			new_value = std::to_string(Main_Data::game_switches->Get(target_var_id));
-			break;
-		case 1: // Variable
-			new_value = std::to_string(Main_Data::game_variables->Get(target_var_id));
-			break;
-		case 2: // String
-			new_value = ToString(Main_Data::game_strings->Get(target_var_id));
-			break;
-		default:
-			Output::Warning("CommandEasyRpgProcessJson: Unsupported target_var_type {}", operation);
+	case 1: { // Set operation: Update JSON data with a new value
+		if (json_data_imm) {
+			Output::Warning("CommandEasyRpgProcessJson: Cannot modify constant JSON string");
 			return true;
 		}
 
+		std::string new_value = get_var_value(target_var_type, target_var_id);
 		result = Json_Helper::SetValue(*json_data, json_path, new_value);
-
 		if (result) {
-			Main_Data::game_strings->Asg({ source_var_id }, *result);
+			Main_Data::game_strings->Asg(source_var_id, *result);
 		}
+		break;
 	}
-	else {
+	case 2: { // GetLength operation
+		size_t length = Json_Helper::GetLength(*json_data, json_path);
+		std::string length_str;
+		if (target_var_type == 0) {
+			// For switches, true if length > 0
+			length_str = (length > 0) ? "1" : "0";
+		}
+		else {
+			length_str = std::to_string(length);
+		}
+		set_var_value(target_var_type, target_var_id, length_str);
+		break;
+	}
+	case 3: { // GetKeys operation
+		bool create_keys_obj = (flags & 8) == 8;
+		auto keys = Json_Helper::GetKeys(*json_data, json_path);
+		std::string keys_str;
+		for (size_t i = 0; i < keys.size(); ++i) {
+			if (i > 0) keys_str += ",";
+			keys_str += "\"" + (keys)[i] + "\"";
+		}
+		std::string json_str = "[" + keys_str + "]";
+		if (create_keys_obj) {
+			json_str = fmt::format(R"({{ "keys": {} }})", json_str);
+		}
+		set_var_value(target_var_type, target_var_id, json_str);
+		break;
+	}
+	case 4: { // GetType operation
+		std::string type = Json_Helper::GetType(*json_data, json_path);
+		std::string value;
+		if (target_var_type == 0) {
+			// For switches, true if it exists and not null
+			value = (!type.empty() && type != "null");
+		}
+		else if (target_var_type == 1) {
+			// For variables, numeric code for type
+			int type_code = 0;
+			if (type == "object") type_code = 1;
+			else if (type == "array") type_code = 2;
+			else if (type == "string") type_code = 3;
+			else if (type == "number") type_code = 4;
+			else if (type == "boolean") type_code = 5;
+			else if (type == "null") type_code = 6;
+			value = std::to_string(type_code);
+		}
+		else {
+			value = type;
+		}
+		set_var_value(target_var_type, target_var_id, value);
+		break;
+	}
+	case 5: { // Remove operation: Remove value from JSON data
+		if (json_data_imm) {
+			Output::Warning("CommandEasyRpgProcessJson: Cannot modify constant JSON string");
+			return true;
+		}
+
+		std::string result = Json_Helper::RemoveValue(*json_data, json_path);
+		if (!result.empty()) {
+			Main_Data::game_strings->Asg(source_var_id, result);
+		}
+		break;
+	}
+	case 6: { // Push operation: Add value to end of array
+		if (json_data_imm) {
+			Output::Warning("CommandEasyRpgProcessJson: Cannot modify constant JSON string");
+			return true;
+		}
+
+		std::string value = get_var_value(target_var_type, target_var_id);
+		std::string result = Json_Helper::PushValue(*json_data, json_path, value);
+		if (!result.empty()) {
+			Main_Data::game_strings->Asg(source_var_id, result);
+		}
+		break;
+	}
+	case 7: { // Pop operation: Remove and return last element of array
+		auto [json_obj, element] = Json_Helper::PopValue(*json_data, json_path);
+		if (!json_obj.empty()) {
+			// Set popped value to target variable
+			set_var_value(target_var_type, target_var_id, element);
+			// Update source with modified JSON after pop
+			if (!json_data_imm) {
+				Main_Data::game_strings->Asg(source_var_id, json_obj);
+			}
+		}
+		break;
+	}
+	case 8: { // Contains operation: Check if path exists
+		bool exists = Json_Helper::Contains(*json_data, json_path);
+		set_var_value(target_var_type, target_var_id, exists ? "1" : "0");
+		break;
+	}
+	default:
 		Output::Warning("CommandEasyRpgProcessJson: Invalid Operation {}", operation);
+	}
+
+	if (target_var_type == 2 && pretty_print == 1) { // Only works with strings
+		std::string target_str = ToString(Main_Data::game_strings->Get(target_var_id));
+		if (auto parsed_json = Json_Helper::Parse(target_str)) {
+			std::string formatted = Json_Helper::PrettyPrint(*parsed_json, 2);
+			Main_Data::game_strings->Asg({ target_var_id }, formatted);
+		}
 	}
 
 	return true;
@@ -5392,11 +5719,7 @@ bool Game_Interpreter::CommandEasyRpgCloneMapEvent(lcf::rpg::EventCommand const&
 	int src_event = ValueOrVariable(com.parameters[2], com.parameters[3]);
 	int target_x = ValueOrVariable(com.parameters[4], com.parameters[5]);
 	int target_y = ValueOrVariable(com.parameters[6], com.parameters[7]);
-
-	int target_event = 0;
-	if (com.parameters.size() >= 10) {
-		target_event = ValueOrVariable(com.parameters[8], com.parameters[9]);
-	}
+	int target_event = ValueOrVariable(com.parameters[8], com.parameters[9]);
 
 	std::string target_name = ToString(CommandStringOrVariable(com, 10, 11));
 
@@ -5423,11 +5746,11 @@ bool Game_Interpreter::CommandEasyRpgDestroyMapEvent(lcf::rpg::EventCommand cons
 		return true;
 	}
 
-	if (com.parameters.size() < 2) {
-		return true;
-	}
-
 	int target_event = ValueOrVariable(com.parameters[0], com.parameters[1]);
+
+	if (target_event == 0 || target_event == Game_Character::CharThisEvent) {
+		target_event = GetThisEventId();
+	}
 
 	_async_op = AsyncOp::MakeDestroyMapEvent(target_event);
 
@@ -5450,4 +5773,64 @@ int Game_Interpreter::ManiacBitmask(int value, int mask) const {
 	}
 
 	return value;
+}
+
+namespace {
+	lcf::rpg::SaveEventExecState const& empty_state = {};
+}
+
+
+lcf::rpg::SaveEventExecState const& Game_Interpreter_Inspector::GetForegroundExecState() {
+	return Game_Interpreter::GetForegroundInterpreter()._state;
+}
+
+lcf::rpg::SaveEventExecState& Game_Interpreter_Inspector::GetForegroundExecStateUnsafe() {
+	return Game_Interpreter::GetForegroundInterpreter()._state;
+}
+
+lcf::rpg::SaveEventExecState const& Game_Interpreter_Inspector::GetExecState(Game_Event const& ev) {
+	if (!ev.interpreter) {
+		return empty_state;
+	}
+	return ev.interpreter->GetState();
+}
+
+lcf::rpg::SaveEventExecState const& Game_Interpreter_Inspector::GetExecState(Game_CommonEvent const& ce) {
+	if (!ce.interpreter) {
+		return empty_state;
+	}
+	return ce.interpreter->GetState();
+}
+
+lcf::rpg::SaveEventExecState& Game_Interpreter_Inspector::GetExecStateUnsafe(Game_Event& ev) {
+	assert(ev.interpreter);
+	return ev.interpreter->_state;
+}
+
+lcf::rpg::SaveEventExecState& Game_Interpreter_Inspector::GetExecStateUnsafe(Game_CommonEvent& ce) {
+	assert(ce.interpreter);
+	return ce.interpreter->_state;
+}
+
+bool Game_Interpreter_Inspector::IsInActiveExcecution(Game_Event const& ev, bool background_only) {
+	if (!background_only) {
+		//TODO
+	}
+	if (!ev.IsActive() || ev.GetTrigger() != lcf::rpg::EventPage::Trigger_parallel) {
+		return false;
+	}
+	auto pg = ev.GetActivePage();
+	if (pg == nullptr || pg->event_commands.empty())
+		return false;
+	return ev.interpreter && ev.interpreter->IsRunning();
+}
+
+bool Game_Interpreter_Inspector::IsInActiveExcecution(Game_CommonEvent const& ce, bool background_only) {
+	if (!background_only) {
+		//TODO
+	}
+	if (!ce.IsWaitingBackgroundExecution(false)) {
+		return false;
+	}
+	return ce.interpreter && ce.interpreter->IsRunning();
 }
