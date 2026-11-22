@@ -1,0 +1,3 @@
+src/libeasyrpg_player_a-registry.o: src/registry.cpp \
+ /usr/include/stdc-predef.h
+/usr/include/stdc-predef.h:

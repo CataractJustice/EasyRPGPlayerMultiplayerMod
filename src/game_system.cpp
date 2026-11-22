@@ -657,4 +657,3 @@ bool Game_System::IsMessageTransparent() {
 
 	return data.message_transparent != 0;
 }
-

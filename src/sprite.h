@@ -98,10 +98,31 @@ public:
 	 */
 	void SetWaverPhase(double phase);
 
+	Color GetFlashEffect() const;
+
 	/**
 	 * Set the flash effect color
 	 */
 	void SetFlashEffect(const Color &color);
+
+	/** @return Whether sprite was modified by a draw operation */
+	bool GetDirty() const;
+
+	/**
+	 * Sprite was modified by a draw operation
+	 *
+	 * @param dirty true: Set dirty flag, false: clear dirty flag
+	 */
+	void SetDirty(bool dirty);
+
+	/** @return Whether any effect such as Tone is active */
+	bool IsSpriteEffectActive() const;
+
+	/**
+	 * @param check_oob Returns an empty bitmap when the sprite is out of bounds
+	 * @return Either the original bitmap or the effect bitmap when an effect
+	           is active. The effect bitmap is precropped to the spritesheet. */
+	BitmapRef RefreshBitmap(bool check_oob = false);
 
 private:
 	BitmapRef bitmap;
@@ -126,6 +147,9 @@ private:
 	double waver_effect_phase = 0.0;
 	Color flash_effect;
 
+	/** Sprite was painted on and requires an update */
+	bool dirty = false;
+
 	BitmapRef bitmap_effects;
 
 	Rect bitmap_effects_src_rect;
@@ -141,7 +165,6 @@ private:
 	void BlitScreen(Bitmap& dst);
 	void BlitScreenIntern(Bitmap& dst, Bitmap const& draw_bitmap,
 							Rect const& src_rect) const;
-	BitmapRef Refresh(Rect& rect);
 };
 
 inline int Sprite::GetWidth() const {
@@ -296,8 +319,20 @@ inline void Sprite::SetBushDepth(int bush_depth) {
 	bush_effect = bush_depth;
 }
 
+inline Color Sprite::GetFlashEffect() const {
+	return flash_effect;
+}
+
 inline void Sprite::SetFlashEffect(const Color &color) {
 	flash_effect = color;
+}
+
+inline bool Sprite::GetDirty() const {
+	return dirty;
+}
+
+inline void Sprite::SetDirty(bool dirty) {
+	this->dirty = dirty;
 }
 
 #endif

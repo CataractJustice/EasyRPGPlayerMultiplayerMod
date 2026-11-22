@@ -24,13 +24,14 @@
 #include "game_windows.h"
 #include "player.h"
 #include "bitmap.h"
+#include "game_map.h"
 
 Sprite_Picture::Sprite_Picture(int pic_id, Drawable::Flags flags)
 	: Sprite(flags),
 	pic_id(pic_id),
 	feature_spritesheet(Player::IsRPG2k3ECommands()),
 	feature_priority_layers(Player::IsMajorUpdatedVersion()),
-	feature_bottom_trans(Player::IsRPG2k3() && !Player::IsRPG2k3E())
+	feature_bottom_trans(Player::IsRPG2k3() && !Player::IsRPG2k3E() && !Player::game_config.patch_powermode.Get())
 {
 	// Initialize Z value for legacy pictures. Will be overriden in OnPictureShow if
 	// priority layers feature is enabled.
@@ -60,18 +61,17 @@ void Sprite_Picture::OnPictureShow() {
 	}
 }
 
-
-void Sprite_Picture::Draw(Bitmap& dst) {
+bool Sprite_Picture::RefreshPictureState() {
 	const auto& pic = Main_Data::game_pictures->GetPicture(pic_id);
 	const auto& data = pic.data;
 
 	auto& bitmap = GetBitmap();
 
 	if (!bitmap) {
-		return;
+		return false;
 	}
 
-	if (data.easyrpg_type == lcf::rpg::SavePicture::EasyRpgType_window) {
+	if (pic.IsWindowAttached()) {
 		// Paint the Window on the Picture
 		const auto& window = Main_Data::game_windows->GetWindow(pic_id);
 		window.window->Draw(*bitmap.get());
@@ -80,7 +80,7 @@ void Sprite_Picture::Draw(Bitmap& dst) {
 	const bool is_battle = Game_Battle::IsBattleRunning();
 
 	if (is_battle ? !pic.IsOnBattle() : !pic.IsOnMap()) {
-		return;
+		return false;
 	}
 
 	// RPG Maker 2k3 1.12: Spritesheets
@@ -106,8 +106,26 @@ void Sprite_Picture::Draw(Bitmap& dst) {
 	}
 
 	if (Player::game_config.fake_resolution.Get()) {
-		SetX(x + Player::menu_offset_x);
-		SetY(y + Player::menu_offset_y);
+		if (data.fixed_to_map) {
+			// If the picture scrolls with the map, apply the black border if the map is too small
+			int offset_x = 0;
+			int map_width = Game_Map::GetTilesX() * TILE_SIZE;
+			if (map_width < Player::screen_width) {
+				offset_x += (Player::screen_width - map_width) / 2;
+			}
+			SetX(x + offset_x);
+
+			int offset_y = 0;
+			int map_height = Game_Map::GetTilesY() * TILE_SIZE;
+			if (map_height < Player::screen_height) {
+				offset_y += (Player::screen_height - map_height) / 2;
+			}
+			SetY(y + offset_y);
+		} else {
+			// If the picture doesn't scroll with the map, simulate the 340x240 screen
+			SetX(x + Player::menu_offset_x);
+			SetY(y + Player::menu_offset_y);
+		}
 	} else {
 		SetX(x);
 		SetY(y);
@@ -169,8 +187,17 @@ void Sprite_Picture::Draw(Bitmap& dst) {
 
 	// Don't draw anything if zoom is at zero, helps avoid a glitchy rotated sprite in the top left corner
 	if (GetZoomX() <= 0.0 || GetZoomY() <= 0.0) {
+		return false;
+	}
+
+	return true;
+}
+
+void Sprite_Picture::Draw(Bitmap& dst) {
+	if (!RefreshPictureState()) {
 		return;
 	}
+
 	Sprite::Draw(dst);
 }
 

@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <ios>
 #include <istream>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -40,9 +41,9 @@
 namespace FileFinder {
 	constexpr const auto IMG_TYPES = Utils::MakeSvArray(".bmp", ".png", ".xyz");
 	constexpr const auto MUSIC_TYPES = Utils::MakeSvArray(
-			".opus", ".oga", ".ogg", ".wav", ".mid", ".midi", ".mp3", ".wma");
+			".opus", ".oga", ".ogg", ".wav", ".mid", ".midi", ".mp3", ".mod", ".xm", ".s3m", ".it", ".wma");
 	constexpr const auto SOUND_TYPES = Utils::MakeSvArray(
-			".opus", ".oga", ".ogg", ".wav", ".mp3", ".wma");
+			".opus", ".oga", ".ogg", ".wav", ".mp3", ".mod", ".xm", ".s3m", ".it", ".wma");
 	constexpr const auto FONTS_TYPES = Utils::MakeSvArray(".fon", ".fnt", ".bdf", ".ttf", ".ttc", ".otf", ".woff2", ".woff");
 	constexpr const auto TEXT_TYPES = Utils::MakeSvArray(".txt", ".csv", ""); // "" = Complete Filename (incl. extension) provided by the user
 
@@ -230,13 +231,14 @@ namespace FileFinder {
 	Filesystem_Stream::InputStream OpenText(std::string_view name);
 
 	/**
-	* Writes data to a txt file.
-	* If the file exists, it will be overwritten.
-	*
-	* @param name the text file path and name
-	* @param data the content of the text file to be written
-	*/
-	void WriteText(std::string_view name, std::string_view data);
+	 * Opens a given file for writing in the save directory.
+	 * Sanitizes the path and creates the directory hierarchy to the file when
+	 * necessary.
+	 *
+	 * @param name
+	 * @return Filesystem_Stream::OutputStream
+	 */
+	Filesystem_Stream::OutputStream OpenWrite(std::string_view name);
 
 	/**
 	 * Appends name to directory.
@@ -272,6 +274,16 @@ namespace FileFinder {
 	 * @return Vector containing path components
 	 */
 	std::vector<std::string> SplitPath(std::string_view path);
+
+	/**
+	 * Constructs a list of all the paths leading to the file.
+	 * e.g. for /a/b/c/d it creates
+	 * ["/a", "/a/b", "/a/b/c", "/a/b/c/d"]
+	 *
+	 * @param path Path to build prefixes from
+	 * @return all path prefixes
+	 */
+	std::vector<std::string> SplitPathPrefixes(std::string_view path);
 
 	/**
 	 * Splits a path into path and filename.

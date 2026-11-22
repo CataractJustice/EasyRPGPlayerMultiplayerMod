@@ -287,16 +287,25 @@ bool Game_Interpreter_Battle::CommandForceFlee(lcf::rpg::EventCommand const& com
 		return true;
 	}
 
-	bool check = com.parameters[2] == 0;
+	// RPG_RT: Does nothing when the battle does not allow escape
+	auto* scene_battle = static_cast<Scene_Battle*>(Scene::Find(Scene::Battle).get());
+	if (scene_battle && !scene_battle->IsEscapeAllowed()) {
+		return true;
+	}
+
+	// "Ignore if the target is surrounded": The party does not flee in a pincer attack
+	// and the enemies do not flee in a surround attack
+	bool ignore_surrounded = com.parameters[2] != 0;
+	const auto cond = Game_Battle::GetBattleCondition();
 
 	switch (com.parameters[0]) {
 	case 0:
-		if (!check || Game_Battle::GetBattleCondition() != lcf::rpg::System::BattleCondition_pincers) {
+		if (!ignore_surrounded || cond != lcf::rpg::System::BattleCondition_pincers) {
 			this->force_flee_enabled = true;
 		}
 		break;
 	case 1:
-		if (!check || Game_Battle::GetBattleCondition() != lcf::rpg::System::BattleCondition_surround) {
+		if (!ignore_surrounded || cond != lcf::rpg::System::BattleCondition_surround) {
 			int num_escaped = 0;
 			for (auto* enemy: Main_Data::game_enemyparty->GetEnemies()) {
 				if (enemy->Exists()) {
@@ -311,7 +320,8 @@ bool Game_Interpreter_Battle::CommandForceFlee(lcf::rpg::EventCommand const& com
 		}
 		break;
 	case 2:
-		if (!check || Game_Battle::GetBattleCondition() != lcf::rpg::System::BattleCondition_surround) {
+		// RPG_RT: A single enemy never flees in a surround attack, the box is not read
+		if (cond != lcf::rpg::System::BattleCondition_surround) {
 			auto* enemy = Main_Data::game_enemyparty->GetEnemy(com.parameters[1]);
 			if (!enemy) {
 				Output::Warning("ForceFlee: Invalid enemy ID {}", com.parameters[1]);
@@ -496,10 +506,12 @@ bool Game_Interpreter_Battle::CommandShowBattleAnimation(lcf::rpg::EventCommand 
 		Game_Battler* battler_target = nullptr;
 
 		if (allies) {
-			// Allies counted from 1
-			target -= 1;
-			if (target >= 0 && target < Main_Data::game_party->GetBattlerCount()) {
-				battler_target = &(*Main_Data::game_party)[target];
+			// RPG_RT: The target is the ID of a hero (RPG Maker 2003 lists the heroes of the database),
+			// the animation is only shown when the hero is in the party
+			for (auto* actor: Main_Data::game_party->GetActors()) {
+				if (actor->GetId() == target) {
+					battler_target = actor;
+				}
 			}
 		}
 		else {
@@ -645,7 +657,7 @@ bool Game_Interpreter_Battle::ManiacBattleHook(ManiacBattleHookType hook_type, i
 		Output::Warning("CommandManiacControlBattle: Can't call invalid common event {}", common_event_id);
 		return false;
 	}
-	
+
 	// pushes the common event to be run into the queue of events.
 	maniac_interpreter->Push<ExecutionType::ManiacHook>(common_event);
 
@@ -874,11 +886,15 @@ bool Game_Interpreter_Battle::CommandManiacGetBattleInfo(lcf::rpg::EventCommand 
 			case 1:
 			{
 				// states: size, [...state_id]
-				auto states = lcf::Data::states.size();
-				Main_Data::game_variables->Set(information_identifier, states);
-				for (size_t i = 0; i < states; i++)
+				auto states_size = lcf::Data::states.size();
+				auto states = battler->GetStates();
+				// The states list is only as large as the highest inflicted state
+				// Resize it to the number of available states
+				states.resize(states_size);
+				Main_Data::game_variables->Set(information_identifier, states.size());
+				for (size_t i = 0; i < states.size(); i++)
 				{
-					Main_Data::game_variables->Set(information_identifier + i + 1, battler->HasState(lcf::Data::states[i].ID));
+					Main_Data::game_variables->Set(information_identifier + i + 1, states[i]);
 				}
 				break;
 			}
@@ -926,6 +942,7 @@ bool Game_Interpreter_Battle::CommandManiacGetBattleInfo(lcf::rpg::EventCommand 
 		case 0:
 			// actor
 			if (target_id > 0) {
+				// Starts with 1 because it uses the Actor ID, not the index
 				executeOperationSingle(Main_Data::game_actors->GetActor(target_id), Actor);
 			}
 			break;
@@ -944,14 +961,12 @@ bool Game_Interpreter_Battle::CommandManiacGetBattleInfo(lcf::rpg::EventCommand 
 			break;
 		}
 		case 3:
-			// troop member
-			if (target_id > 0) {
-				executeOperationSingle(Main_Data::game_enemyparty->GetEnemy(target_id), Enemy);
-			}
+			// troop member (enemy)
+			executeOperationSingle(Main_Data::game_enemyparty->GetEnemy(target_id), Enemy);
 			break;
 		case 4:
 		{
-			// entire troop
+			// entire troop (enemy)
 			auto count = 0;
 			for (Game_Battler* member : Main_Data::game_enemyparty->GetEnemies()) {
 				count += executeOperationMany(member);

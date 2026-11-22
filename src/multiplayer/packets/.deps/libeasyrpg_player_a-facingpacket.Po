@@ -1,0 +1,9 @@
+src/multiplayer/packets/libeasyrpg_player_a-facingpacket.o: \
+ src/multiplayer/packets/facingpacket.cpp /usr/include/stdc-predef.h \
+ src/multiplayer/packets/facingpacket.h \
+ src/multiplayer/packets/datapacket.h \
+ src/multiplayer/packets/basepacket.h
+/usr/include/stdc-predef.h:
+src/multiplayer/packets/facingpacket.h:
+src/multiplayer/packets/datapacket.h:
+src/multiplayer/packets/basepacket.h:

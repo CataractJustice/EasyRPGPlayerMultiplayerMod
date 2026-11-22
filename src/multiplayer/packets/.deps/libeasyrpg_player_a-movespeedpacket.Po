@@ -1,0 +1,9 @@
+src/multiplayer/packets/libeasyrpg_player_a-movespeedpacket.o: \
+ src/multiplayer/packets/movespeedpacket.cpp /usr/include/stdc-predef.h \
+ src/multiplayer/packets/movespeedpacket.h \
+ src/multiplayer/packets/datapacket.h \
+ src/multiplayer/packets/basepacket.h
+/usr/include/stdc-predef.h:
+src/multiplayer/packets/movespeedpacket.h:
+src/multiplayer/packets/datapacket.h:
+src/multiplayer/packets/basepacket.h:

@@ -20,6 +20,8 @@
 #include <lcf/encoder.h>
 #include <lcf/reader_util.h>
 #include "async_handler.h"
+#include "filefinder.h"
+#include "filesystem_stream.h"
 #include "game_map.h"
 #include "game_message.h"
 #include "game_strings.h"
@@ -90,7 +92,7 @@ int Game_Strings::ToNum(Str_Params params, int var_id, Game_Variables& variables
 	if (params.hex)
 		num = static_cast<int>(std::strtol(it->second.c_str(), nullptr, 16));
 	else
-		num = static_cast<int>(std::strtol(it->second.c_str(), nullptr, 0));
+		num = static_cast<int>(std::strtol(it->second.c_str(), nullptr, 10));
 
 	variables.Set(var_id, num);
 
@@ -237,20 +239,10 @@ bool Game_Strings::ToFile(Str_Params params, std::string filename, int encoding)
 		filename += ".txt";
 	}
 
-	auto txt_out = FileFinder::Save().OpenOutputStream(filename);
-	auto txt_dir = FileFinder::GetPathAndFilename(filename).first;
-
+	auto txt_out = FileFinder::OpenWrite(filename);
 	if (!txt_out) {
-		if (!FileFinder::Save().MakeDirectory(txt_dir, false)) {
-			Output::Warning("Maniac String Op ToFile failed. Cannot create directory {}", txt_dir);
-			return false;
-		}
-
-		txt_out = FileFinder::Save().OpenOutputStream(filename);
-		if (!txt_out) {
-			Output::Warning("Maniac String Op ToFile failed. Cannot write to {}", filename);
-			return false;
-		}
+		Output::Warning("Maniac String Op ToFile failed. Cannot write to {}", filename);
+		return false;
 	}
 
 	if (encoding == 0) {

@@ -24,6 +24,7 @@
 #include "game_party.h"
 #include "game_player.h"
 #include "game_system.h"
+#include "game_variables.h"
 #include "main_data.h"
 #include "output.h"
 #include "player.h"
@@ -33,6 +34,7 @@
 #include <cmath>
 #include <cstdint>
 #include <lcf/rpg/savepartylocation.h>
+#include <limits>
 
 int ControlVariables::Random(int value, int value2) {
 	int rmax = std::max(value, value2);
@@ -138,6 +140,12 @@ int ControlVariables::Actor(int op, int actor_id) {
 				return actor->GetAtbGauge();
 			}
 			break;
+		case 17:
+			// Required Experience
+			if (Player::IsPatchManiac()) {
+				return actor->GetNextExp();
+			}
+			break;
 	}
 
 	Output::Warning("ControlVariables::Actor: Unknown op {}", op);
@@ -190,21 +198,11 @@ int ControlVariables::Event(int op, int event_id, const Game_BaseInterpreterCont
 				break;
 			case 4: {
 				// Screen X
-				if (Player::game_config.fake_resolution.Get()) {
-					int pan_delta = (Game_Player::GetDefaultPanX() - lcf::rpg::SavePartyLocation::kPanXDefault) / TILE_SIZE;
-					return character->GetScreenX() - pan_delta;
-				} else {
-					return character->GetScreenX();
-				}
+				return character->GetScreenX();
 			}
 			case 5: {
 				// Screen Y
-				if (Player::game_config.fake_resolution.Get()) {
-					int pan_delta = (Game_Player::GetDefaultPanY() - lcf::rpg::SavePartyLocation::kPanYDefault) / TILE_SIZE;
-					return character->GetScreenY() - pan_delta;
-				} else {
-					return character->GetScreenY();
-				}
+				return character->GetScreenY();
 			}
 			case 6:
 				// Event ID
@@ -288,8 +286,13 @@ int ControlVariables::Other(int op) {
 		case 13:
 			// Patch version
 			if (Player::IsPatchManiac()) {
-				// Latest version before the engine rewrite
-				return 200128;
+				auto var = Player::game_config.patch_maniac.Get();
+				if (var < 10) {
+					// Latest version before the engine rewrite
+					return 200128;
+				}
+
+				return var;
 			}
 			break;
 	}
@@ -430,23 +433,23 @@ int ControlVariables::Binary(int op, int arg1, int arg2) {
 			if (arg2_64 != 0) {
 				result = arg1_64 % arg2_64;
 			} else {
-				result = arg1_64;
+				result = 0;
 			}
 			break;
 		case 6:
-			result = arg1_64 | arg2_64;
+			result = arg1 | arg2;
 			break;
 		case 7:
-			result = arg1_64 & arg2_64;
+			result = arg1 & arg2;
 			break;
 		case 8:
-			result = arg1_64 ^ arg2_64;
+			result = arg1 ^ arg2;
 			break;
 		case 9:
-			result = arg1_64 << arg2_64;
+			result = static_cast<int64_t>(static_cast<uint32_t>(arg1) << arg2);
 			break;
 		case 10:
-			result = arg1_64 >> arg2_64;
+			result = static_cast<int64_t>(static_cast<uint32_t>(arg1) >> arg2);
 			break;
 		default:
 			Output::Warning("ControlVariables::Binary: Unknown op {}", op);
@@ -485,5 +488,40 @@ int ControlVariables::Divmul(int arg1, int arg2, int arg3) {
 }
 
 int ControlVariables::Between(int arg1, int arg2, int arg3) {
-	return (arg1 >= arg2 && arg2 <= arg3) ? 0 : 1;
+	int min_v = std::min(arg2, arg3);
+	int max_v = std::max(arg2, arg3);
+	return (arg1 >= min_v && arg1 <= max_v) ? 1 : 0;
+}
+
+int ControlVariables::Lerp(int a, int b, int num, int den) {
+	if (den == 0) return a;
+	int64_t diff = static_cast<int64_t>(b) - a;
+	return a + static_cast<int>(diff * num / den);
+}
+
+int ControlVariables::ArraySum(int var_id, int length) {
+	if (length <= 0) return 0;
+	int64_t sum = 0;
+	for (int i = 0; i < length; ++i) {
+		sum += Main_Data::game_variables->Get(var_id + i);
+	}
+	return static_cast<int>(Utils::Clamp<int64_t>(sum, std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()));
+}
+
+int ControlVariables::ArrayMin(int var_id, int length) {
+	if (length <= 0) return 0;
+	int min_val = Main_Data::game_variables->Get(var_id);
+	for (int i = 1; i < length; ++i) {
+		min_val = std::min<int>(min_val, Main_Data::game_variables->Get(var_id + i));
+	}
+	return min_val;
+}
+
+int ControlVariables::ArrayMax(int var_id, int length) {
+	if (length <= 0) return 0;
+	int max_val = Main_Data::game_variables->Get(var_id);
+	for (int i = 1; i < length; ++i) {
+		max_val = std::max<int>(max_val, Main_Data::game_variables->Get(var_id + i));
+	}
+	return max_val;
 }

@@ -21,12 +21,15 @@
 #include <iterator>
 
 #include "compiler.h"
+#include "input_buttons.h"
+#include "main_data.h"
 #include "utils.h"
 #include "window_message.h"
 #include "game_actors.h"
 #include "game_map.h"
 #include "game_message.h"
 #include "game_party.h"
+#include "game_runtime_patches.h"
 #include "game_system.h"
 #include "game_variables.h"
 #include "input.h"
@@ -132,6 +135,13 @@ Window_Message::~Window_Message() {
 	}
 }
 
+namespace {
+	bool IsDecisionOrMouseTriggered() {
+		return Input::IsTriggered(Input::DECISION) ||
+			(Main_Data::game_system->IsMessageMouseEnabled() && Input::IsTriggered(Input::MOUSE_LEFT));
+	}
+}
+
 void Window_Message::StartMessageProcessing(PendingMessage pm) {
 	text.clear();
 	pending_message = std::move(pm);
@@ -206,7 +216,11 @@ void Window_Message::OnFinishPage() {
 		StartNumberInputProcessing();
 	} else if (!kill_page) {
 		DebugLog("{}: SET PAUSE");
-		SetPause(true);
+
+		if (!((Player::debug_flag || Main_Data::game_system->IsFastForwardText()) &&
+			Input::IsPressed(Input::DEBUG_MESSAGE_FAST_FORWARD))) {
+				SetPause(true);
+		}
 	}
 
 	line_count = 0;
@@ -478,9 +492,10 @@ void Window_Message::UpdateMessage() {
 	// Message Box Show Message rendering loop
 	bool instant_speed_forced = false;
 
-	if (Player::debug_flag && Input::IsPressed(Input::SHIFT)) {
-		instant_speed = true;
-		instant_speed_forced = true;
+	if ((Player::debug_flag || Main_Data::game_system->IsFastForwardText()) &&
+		(Input::IsPressed(Input::SHIFT) || Input::IsPressed(Input::DEBUG_MESSAGE_FAST_FORWARD))) {
+			instant_speed = true;
+			instant_speed_forced = true;
 	}
 
 	auto system = Cache::SystemOrBlack();
@@ -574,16 +589,28 @@ void Window_Message::UpdateMessage() {
 			switch (ch) {
 			case 'c':
 			case 'C':
-				{
-					// Color
-					auto pres = Game_Message::ParseColor(text_index, end, Player::escape_char, true);
-					auto value = pres.value;
-					text_index = pres.next;
-					DebugLogText("{}: MSG Color \\c[{}]", value);
-					SetWaitForNonPrintable(0);
-					text_color = value > 19 ? 0 : value;
+			{
+				// Color
+				auto pres = Game_Message::ParseColor(text_index, end, Player::escape_char, true, Game_Message::default_max_recursion, Player::IsPatchManiac());
+				text_index = pres.next;
+
+				if (Player::IsPatchManiac()) {
+					if (pres.is_array()) {
+						// Maniacs \C[x,y] -> y * 10 + x
+						text_color = pres.values[1] * 10 + pres.values[0];
+					} else {
+						// Maniacs \C[n] (arbitrary amount of colors)
+						text_color = pres.values.empty() ? 0 : pres.values[0];
+					}
 				}
-				break;
+				else {
+					text_color = pres.value > 19 ? 0 : pres.value;
+				}
+
+				DebugLogText("{}: MSG Color \\c[{}]", text_color);
+				SetWaitForNonPrintable(0);
+			}
+			break;
 			case 's':
 			case 'S':
 				{
@@ -797,7 +824,7 @@ void Window_Message::UpdateCursorRect() {
 }
 
 void Window_Message::WaitForInput() {
-	if (Input::IsTriggered(Input::DECISION) ||
+	if (IsDecisionOrMouseTriggered() ||
 			Input::IsTriggered(Input::CANCEL)) {
 		SetPause(false);
 	}
@@ -811,7 +838,7 @@ void Window_Message::InputChoice() {
 			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Cancel));
 			choice_result = pending_message.GetChoiceCancelType() - 1; // Cancel
 		}
-	} else if (Input::IsTriggered(Input::DECISION)) {
+	} else if (IsDecisionOrMouseTriggered()) {
 		if (!pending_message.IsChoiceEnabled(index)) {
 			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Buzzer));
 			return;
@@ -833,10 +860,11 @@ void Window_Message::InputChoice() {
 
 void Window_Message::InputNumber() {
 	number_input_window->SetVisible(true);
-	if (Input::IsTriggered(Input::DECISION)) {
+	if (IsDecisionOrMouseTriggered()) {
 		Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Decision));
 		Main_Data::game_variables->Set(pending_message.GetNumberInputVariable(), number_input_window->GetNumber());
 		Game_Map::SetNeedRefresh(true);
+		RuntimePatches::OnVariableChanged(pending_message.GetNumberInputVariable());
 		number_input_window->SetNumber(0);
 		number_input_window->SetActive(false);
 	}

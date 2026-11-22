@@ -64,6 +64,7 @@
 #include "util_macro.h"
 #include "game_interpreter_map.h"
 #include <lcf/reader_lcf.h>
+#include <lcf/reader_util.h>
 
 enum EnemyEncounterSubcommand {
 	eOptionEnemyEncounterVictory = 0,
@@ -294,6 +295,12 @@ bool Game_Interpreter_Map::CommandEnemyEncounter(lcf::rpg::EventCommand const& c
 	BattleArgs args;
 
 	args.troop_id = ValueOrVariable(com.parameters[0], com.parameters[1]);
+
+	if (!lcf::ReaderUtil::GetElement(lcf::Data::troops, args.troop_id)) {
+		Output::Warning("EnemyEncounter: Invalid Monster Party ID {}", args.troop_id);
+		SetSubcommandIndex(com.indent, eOptionEnemyEncounterVictory);
+		return true;
+	}
 
 	switch (com.parameters[2]) {
 	case 0:
@@ -945,7 +952,7 @@ bool Game_Interpreter_Map::CommandEasyRpgPathfinder(lcf::rpg::EventCommand const
 		int var = ValueOrVariable(com.parameters[11], com.parameters[12]);
 		int num_events_ids = Main_Data::game_variables->Get(var);
 		auto lst = Main_Data::game_variables->GetRange(var + 1, num_events_ids);
-		std::copy(lst.begin(), lst.end(), event_id_ignore_list.begin());
+		std::copy(lst.begin(), lst.end(), std::back_inserter(event_id_ignore_list));
 		ni = 13;
 	}
 	args.event_id_ignore_list = event_id_ignore_list;

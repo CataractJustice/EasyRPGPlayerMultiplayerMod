@@ -18,14 +18,6 @@
 #ifndef EP_SYSTEM_H
 #define EP_SYSTEM_H
 
-/*
- * Includes GNU Autotools build configuration parameters.
- * This option may have defined USE_SDL and others.
- */
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif
-
 #if !(defined(USE_SDL) || defined(PLAYER_UI))
 #  error "This build doesn't target a backend"
 #endif
@@ -52,7 +44,7 @@
 #  define SUPPORT_JOYSTICK
 #  define SUPPORT_JOYSTICK_AXIS
 #  define SUPPORT_TOUCH
-#elif defined(EMSCRIPTEN)
+#elif defined(__EMSCRIPTEN__)
 #  define SUPPORT_MOUSE
 #  define SUPPORT_TOUCH
 #  define SUPPORT_JOYSTICK

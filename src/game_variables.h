@@ -23,6 +23,7 @@
 #include "compiler.h"
 #include "string_view.h"
 #include <cstdint>
+#include <lcf/span.h>
 #include <string>
 
 /**
@@ -34,10 +35,10 @@ public:
 	using Variables_t = std::vector<Var_t>;
 
 	static constexpr int max_warnings = 10;
-	static constexpr Var_t min_2k = -999999;
-	static constexpr Var_t max_2k = 999999;
-	static constexpr Var_t min_2k3 = -9999999;
-	static constexpr Var_t max_2k3 = 9999999;
+	static constexpr Var_t min_2k = -999'999;
+	static constexpr Var_t max_2k = 999'999;
+	static constexpr Var_t min_2k3 = -9'999'999;
+	static constexpr Var_t max_2k3 = 9'999'999;
 
 	Game_Variables(Var_t minval, Var_t maxval);
 
@@ -49,7 +50,8 @@ public:
 	Var_t Get(int variable_id) const;
 	Var_t GetIndirect(int variable_id) const;
 	Var_t GetWithMode(int id, int mode) const;
-	std::vector<Var_t> GetRange(int variable_id, int length);
+	lcf::Span<const Var_t> GetRange(int variable_id, int length);
+	lcf::Span<Var_t> GetWritableRange(int variable_id, int length);
 
 	Var_t Set(int variable_id, Var_t value);
 	Var_t Add(int variable_id, Var_t value);
@@ -127,6 +129,10 @@ public:
 	void BitShiftLeftArray(int first_id_a, int last_id_a, int first_id_b);
 	void BitShiftRightArray(int first_id_a, int last_id_a, int first_id_b);
 	void SwapArray(int first_id_a, int last_id_a, int first_id_b);
+	void DerefArray(int first_id_a, int last_id_a, int first_id_b);
+	void SortSyncRange(int first_id, int last_id, int sync_id, bool asc);
+	void ShuffleSyncRange(int first_id, int last_id, int sync_id);
+	void ReverseRange(int first_id, int last_id);
 
 	std::string_view GetName(int _id) const;
 

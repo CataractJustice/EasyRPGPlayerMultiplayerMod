@@ -103,6 +103,51 @@ Game_Windows::Window_User* Game_Windows::GetWindowPtr(int id) {
 		? &windows[id - 1] : nullptr;
 }
 
+void Game_Windows::MoveWindow(int src_id, int dst_id) {
+	if (src_id == dst_id) {
+		return;
+	}
+
+	// Delete the destination, then swap
+	if (dst_id > 0) {
+		auto& dst_win = GetWindow(dst_id);
+		dst_win.Erase();
+	}
+
+	SwapWindow(src_id, dst_id);
+}
+
+void Game_Windows::SwapWindow(int id1, int id2) {
+	if (id1 == id2 || (id1 <= 0 && id2 <= 0)) {
+		return;
+	}
+
+	auto max_id = std::max(id1, id2);
+	GetWindow(max_id); // Preallocate to ensure references are stable
+
+	Window_User bad_win{0};
+
+	auto* src_win = &bad_win;
+	auto* dst_win = &bad_win;
+
+	if (id1 > 0) {
+		src_win = &GetWindow(id1);
+	} else {
+		bad_win = Window_User(id1);
+	}
+
+	if (id2 > 0) {
+		dst_win = &GetWindow(id2);
+	} else {
+		bad_win = Window_User(id2);
+	}
+
+	std::swap(src_win->data.ID, dst_win->data.ID);
+
+	// Must be last (invalidates references)
+	std::swap(*src_win, *dst_win);
+}
+
 bool Game_Windows::Window_User::Create(const WindowParams& params) {
 	Erase();
 
@@ -258,6 +303,7 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 				const auto* end = line.data() + line.size();
 
 				while (text_index != end) {
+					auto prev_text_index = text_index;
 					auto tret = Utils::TextNext(text_index, end, Player::escape_char);
 					text_index = tret.next;
 
@@ -287,7 +333,8 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 
 					if (tret.is_exfont) {
 						// exfont processed later
-						line32 += '$';
+						line32 += Utils::DecodeUTF32(std::string_view(prev_text_index, text_index - prev_text_index));
+						continue;
 					}
 
 					if (tret.is_escape && ch != Player::escape_char) {
@@ -302,7 +349,7 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 							case 'C':
 							{
 								// Color
-								text_index = Game_Message::ParseColor(text_index, end, Player::escape_char, true).next;
+								text_index = Game_Message::ParseColor(text_index, end, Player::escape_char, true, Game_Message::default_max_recursion, Player::IsPatchManiac()).next;
 							}
 							break;
 						}
@@ -391,6 +438,7 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 			const auto* end = line.data() + line.size();
 
 			while (text_index != end) {
+				auto prev_text_index = text_index;
 				auto tret = Utils::TextNext(text_index, end, Player::escape_char);
 				text_index = tret.next;
 
@@ -418,7 +466,8 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 
 				if (tret.is_exfont) {
 					// exfont processed later
-					line32 += '$';
+					line32 += Utils::DecodeUTF32(std::string_view(prev_text_index, text_index - prev_text_index));
+					continue;
 				}
 
 				if (tret.is_escape && ch != Player::escape_char) {
@@ -429,16 +478,27 @@ void Game_Windows::Window_User::Refresh(bool& async_wait) {
 
 					// Special message codes
 					switch (ch) {
-						case 'c':
-						case 'C':
-						{
-							// Color
-							auto pres = Game_Message::ParseColor(text_index, end, Player::escape_char, true);
-							auto value = pres.value;
-							text_index = pres.next;
-							text_color = value > 19 ? 0 : value;
+					case 'c':
+					case 'C':
+					{
+						// Color
+						auto pres = Game_Message::ParseColor(text_index, end, Player::escape_char, true, Game_Message::default_max_recursion, Player::IsPatchManiac());
+						text_index = pres.next;
+
+						if (Player::IsPatchManiac()) {
+							if (pres.is_array()) {
+								// Maniacs \C[x,y] -> y * 10 + x
+								text_color = pres.values[1] * 10 + pres.values[0];
+							} else {
+								// Maniacs \C[n] (arbitrary amount of colors)
+								text_color = pres.values.empty() ? 0 : pres.values[0];
+							}
 						}
-						break;
+						else {
+							text_color = pres.value > 19 ? 0 : pres.value;
+						}
+					}
+					break;
 					}
 					continue;
 				}

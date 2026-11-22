@@ -1,0 +1,7 @@
+src/multiplayer/packets/libeasyrpg_player_a-datapacket.o: \
+ src/multiplayer/packets/datapacket.cpp /usr/include/stdc-predef.h \
+ src/multiplayer/packets/datapacket.h \
+ src/multiplayer/packets/basepacket.h
+/usr/include/stdc-predef.h:
+src/multiplayer/packets/datapacket.h:
+src/multiplayer/packets/basepacket.h:
