@@ -50,14 +50,22 @@ void onMessageAsync(unsigned char* data, unsigned int byteLength)
 	#endif
 }
 
+std::string getGameName()
+{
+	const char* result = emscripten_run_script_string(
+		"new URLSearchParams(window.location.search).get('game') || ''"
+	);
 
+	return result ? result : "";
+}
 
 void Connect(std::string url, std::string game, Credentials credentials) 
 {
+	std::string connectionURL = url + "?game=" + getGameName();
 	#ifdef __EMSCRIPTEN__
 	//create emscripten WS//
 	EmscriptenWebSocketCreateAttributes ws_attrs = {
-		url.c_str(),
+		connectionURL.c_str(),
 		"binary",
 		EM_TRUE
 	};
@@ -70,32 +78,32 @@ void Connect(std::string url, std::string game, Credentials credentials)
 	ix::initNetSystem();
 	webSocketPtr = new ix::WebSocket();
 	ix::WebSocket& webSocket = *webSocketPtr;
-	webSocket.setUrl(url.c_str());
+	webSocket.setUrl(connectionURL.c_str());
 	webSocket.setHandshakeTimeout(5);
 	webSocket.disablePerMessageDeflate();
 	Output::Debug("Multiplayer Setting WebSocket callbacks.");
 	webSocket.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg)
-	    {
-	        if (msg->type == ix::WebSocketMessageType::Message)
-	        {
+		{
+			if (msg->type == ix::WebSocketMessageType::Message)
+			{
 				onMessageAsync((unsigned char*)(msg->str.c_str()), msg->str.length());
-	        }
-	        else if (msg->type == ix::WebSocketMessageType::Open)
-	        {
+			}
+			else if (msg->type == ix::WebSocketMessageType::Open)
+			{
 				Output::Debug("Multiplayer WebSocket open.");
-	        }
-	        else if (msg->type == ix::WebSocketMessageType::Error)
-	        {
+			}
+			else if (msg->type == ix::WebSocketMessageType::Error)
+			{
 				if(msg->errorInfo.http_status)
 					Output::Warning("IXWebSocket error: {}", msg->errorInfo.reason);
 				else
 					Output::Warning("{}", "Unknow IXWebSocket error");
-	        } 
+			} 
 			else if(msg->type == ix::WebSocketMessageType::Close) 
 			{
 				Output::Debug("Multiplayer WebSocket connection closed: {}.", msg->closeInfo.reason);
 			}
-	    }
+		}
 	);
 
 	Output::Debug("Multiplayer Starting WebSocket.");
