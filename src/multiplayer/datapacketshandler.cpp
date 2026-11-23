@@ -162,24 +162,26 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 
 	case DataPacketSlot::chatmsg:
 	{
-		IChatMsgPacket msg;
-		memcpy(&msg, packetData, sizeof(IChatMsgPacket));
-		#ifdef __EMSCRIPTEN__
-		#ifdef INTEGRATED_CHAT
 		if(sizeof(IChatMsgPacket) != byteLength)
 			return;
+		IChatMsgPacket msg;
+		memcpy(&msg, packetData, sizeof(IChatMsgPacket));
+		msg.nametag[max_nametag_byte_length - 1] = 0;
+		msg.message[max_chat_message_length - 1] = 0;
+		bool isGlobal = msg.scope == DataPacketScope::game;
+		std::string author = dataOwnerCharacter.get() ? dataOwnerCharacter->GetNametag() : std::string(msg.nametag);
+		#ifdef __EMSCRIPTEN__
+		#ifdef INTEGRATED_CHAT
 		if(Chat::HasInstance())
 			Chat::Instance().PushMessage(&msg);
 		#else
-		msg.nametag[max_nametag_byte_length - 1] = 0;
-		msg.message[max_chat_message_length - 1] = 0;
-		std::string author = dataOwnerCharacter.get() ? dataOwnerCharacter->GetNametag() : std::string(msg.nametag);
 		EM_ASM({
 			window.parent.EasyRPGMultiplayer.receiveMessage({
 				author: UTF8ToString($0),
-				message: UTF8ToString($1)
+				message: UTF8ToString($1),
+				isGlobal: $2
 			});
-		}, author.c_str(), msg.message);
+		}, author.c_str(), msg.message, isGlobal);
 		#endif
 		#endif
 	}
