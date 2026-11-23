@@ -50,6 +50,7 @@ void onMessageAsync(unsigned char* data, unsigned int byteLength)
 	#endif
 }
 
+#ifdef __EMSCRIPTEN__
 std::string getGameName()
 {
 	const char* result = emscripten_run_script_string(
@@ -58,11 +59,12 @@ std::string getGameName()
 
 	return result ? result : "";
 }
+#endif
 
 void Connect(std::string url, std::string game, Credentials credentials) 
 {
-	std::string connectionURL = url + "?game=" + getGameName();
 	#ifdef __EMSCRIPTEN__
+	std::string connectionURL = url + "?game=" + getGameName();
 	//create emscripten WS//
 	EmscriptenWebSocketCreateAttributes ws_attrs = {
 		connectionURL.c_str(),
@@ -75,6 +77,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 	emscripten_websocket_set_onclose_callback(emsocket, NULL, onEmClose);
 	emscripten_websocket_set_onmessage_callback(emsocket, NULL, onEmMessage);
 	#else
+	std::string connectionURL = url + "?game=" + game;
 	ix::initNetSystem();
 	webSocketPtr = new ix::WebSocket();
 	ix::WebSocket& webSocket = *webSocketPtr;
