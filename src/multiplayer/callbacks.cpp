@@ -16,7 +16,7 @@ void sendName(const std::string& username) {
 void sendChatMessage(const std::string& text, const std::string nametag, bool isGlobal) {
 	if(text.length() > max_chat_message_length - 1) return;
 	unsigned char flags = isGlobal ? DataPacketFlag::broadcastForGame : DataPacketFlag::broadcastForMap;
-	OChatMsgPacket chatPacket(text, nametag, flags, isGlobal);
+	OChatMsgPacket chatPacket(text, nametag, flags);
     sendMessage((unsigned char*)&chatPacket, sizeof(chatPacket));
 }
 

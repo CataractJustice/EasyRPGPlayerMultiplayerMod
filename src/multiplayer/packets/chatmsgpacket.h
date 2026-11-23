@@ -10,7 +10,7 @@ struct OChatMsgPacket : ODataPacket
 {
 	char nametag[max_nametag_byte_length];
 	char message[max_chat_message_length];
-	OChatMsgPacket(const std::string& message, const std::string& nametag, unsigned char flags, bool isGlobal = false);
+	OChatMsgPacket(const std::string& message, const std::string& nametag, unsigned char flags);
 };
 
 
