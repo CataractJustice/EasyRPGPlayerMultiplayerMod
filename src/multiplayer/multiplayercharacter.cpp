@@ -3,13 +3,14 @@
 #include "output.h"
 #include "drawable_mgr.h"
 #include "scene_map.h"
-#include "main_data.h"
 #include "game_system.h"
 #include "game_screen.h"
 #include "cache.h"
-#ifdef INTEGRATED_CHAT
-#include "chat.h"
-#endif
+#include "font.h"
+#include "text.h"
+#include "async_handler.h"
+#include <cmath>
+
 #define MOVE_QUEUE_CAPACITY 8
 
 void MultiplayerCharacter::MultiplayerMove(int x, int y) 
@@ -23,19 +24,59 @@ void MultiplayerCharacter::Update()
 {
 	SetProcessed(false);
 	Game_Character::Update();
-	this->sprite->SetFlashEffect(Main_Data::game_screen->GetFlashColor());
-	this->sprite->SetTone(Main_Data::game_screen->GetTone());
-	if(flashR || flashG || flashB || flashP || flashT) 
+
+	if (!this->sprite) {
+		auto scene_map = Scene::Find(Scene::SceneType::Map);
+		if (scene_map) {
+			auto old_list = &DrawableMgr::GetLocalList();
+			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+			this->sprite = std::make_unique<Sprite_Character>(this);
+			DrawableMgr::SetLocalList(old_list);
+		}
+	}
+
+	if (!this->nametag_sprite) {
+		auto scene_map = Scene::Find(Scene::SceneType::Map);
+		if (scene_map) {
+			auto old_list = &DrawableMgr::GetLocalList();
+			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+			this->nametag_sprite = std::make_unique<Sprite>();
+			DrawableMgr::SetLocalList(old_list);
+			UpdateNametagBitmap();
+		}
+	}
+
+	if (this->sprite) {
+		this->sprite->SetFlashEffect(Main_Data::game_screen->GetFlashColor());
+		this->sprite->SetTone(Main_Data::game_screen->GetTone());
+	}
+
+	if (flashR || flashG || flashB || flashP || flashT) 
 	{
 		this->Flash(flashR, flashG, flashB, flashP, flashT);
 	}
-	if(this->IsVisible()) 
+
+	if (this->IsVisible() && this->sprite) 
 	{
 		this->sprite->Update();
 		this->sprite->SetFlashEffect(this->GetFlashColor());
 	}
 
-	if(this->IsStopping() && !moveQueue.empty()) 
+	if (this->nametag_sprite) {
+		bool visible = this->IsVisible() && !this->nametag.empty();
+		this->nametag_sprite->SetVisible(visible);
+		if (visible) {
+			this->nametag_sprite->SetX(this->GetScreenX());
+			int chara_height = (this->sprite && this->sprite->GetHeight() > 0) ? this->sprite->GetHeight() : 32;
+			this->nametag_sprite->SetY(this->GetScreenY() - chara_height - 2);
+			this->nametag_sprite->SetZ(Priority_EventsAbove + 1000);
+			this->nametag_sprite->SetOpacity(this->GetOpacity());
+			this->nametag_sprite->SetTone(Main_Data::game_screen->GetTone());
+			this->nametag_sprite->SetFlashEffect(this->GetFlashColor());
+		}
+	}
+
+	if (this->IsStopping() && !moveQueue.empty()) 
 	{
 		std::pair<int, int> nextMove = moveQueue.front();
 		moveQueue.pop();
@@ -46,17 +87,17 @@ void MultiplayerCharacter::Update()
 		dx += 1;
 		dy += 1;
 
-		if(dx >= 0 && dy >= 0 && dx <= 2 && dy <= 2) {
+		if (dx >= 0 && dy >= 0 && dx <= 2 && dy <= 2) {
 
-			const Direction directons[3][3] = 
+			const int directions[3][3] = 
 			{
 				{Direction::UpLeft, 	Direction::Up, 		Direction::UpRight		},
-				{Direction::Left, 		Direction(-1), 		Direction::Right		},
+				{Direction::Left, 		-1, 				Direction::Right		},
 				{Direction::DownLeft,	Direction::Down, 	Direction::DownRight	}
 			};
 
-			Direction direction = directons[dy][dx];
-			if(direction != -1)
+			int direction = directions[dy][dx];
+			if (direction != -1)
 				Move(direction);
 		} 
 		else 
@@ -75,7 +116,7 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	{
 		actors[i] = nullptr;
 	}
-	this->nametag = "["+std::to_string(id)+"]";
+	this->nametag = "[" + std::to_string(id) + "]";
 	this->systemname = (std::string)Main_Data::game_system->GetSystemName();
 	this->id = id;
 	this->SetSpriteGraphic(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
@@ -85,13 +126,120 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	this->SetMoveSpeed(Main_Data::game_player->GetMoveSpeed());
 	this->SetMoveFrequency(Main_Data::game_player->GetMoveFrequency());
 	this->SetThrough(true);
+
 	auto old_list = &DrawableMgr::GetLocalList();
 	auto scene_map = Scene::Find(Scene::SceneType::Map);
-	DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	if (scene_map) {
+		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	}
 	sprite = std::make_unique<Sprite_Character>(this);
-	DrawableMgr::SetLocalList(old_list);
+	nametag_sprite = std::make_unique<Sprite>();
+	if (scene_map) {
+		DrawableMgr::SetLocalList(old_list);
+	}
+
 	SetFlash(255, 255, 255, 0, 0);
+	UpdateNametagBitmap();
 	Output::Debug("New Multiplayer Character Created, id: {}.", id);
+}
+
+MultiplayerCharacter::~MultiplayerCharacter() 
+{
+	auto old_list = &DrawableMgr::GetLocalList();
+	auto scene_map = Scene::Find(Scene::SceneType::Map);
+	if (scene_map) {
+		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	}
+	sprite.reset();
+	nametag_sprite.reset();
+	for (int i = 0; i < ACTOR_SLOTS; i++) 
+	{
+		delete actors[i];
+		actors[i] = nullptr;
+	}
+	if (scene_map) {
+		DrawableMgr::SetLocalList(old_list);
+	}
+}
+
+void MultiplayerCharacter::UpdateNametagBitmap() 
+{
+	if (this->nametag.empty()) {
+		if (nametag_sprite) {
+			nametag_sprite->SetBitmap(nullptr);
+		}
+		return;
+	}
+
+	FontRef font = Font::Default();
+	if (!font) {
+		return;
+	}
+
+	Rect text_size = Text::GetSize(*font, this->nametag);
+	if (text_size.width <= 0 || text_size.height <= 0) {
+		return;
+	}
+
+	BitmapRef system = Cache::System(this->systemname);
+	if (!system) {
+		system = Cache::SystemOrBlack();
+	}
+
+	int padding = 2;
+	int w = text_size.width + padding * 2;
+	int h = text_size.height + padding * 2;
+	BitmapRef bmp = Bitmap::Create(w, h, Color(0, 0, 0, 0));
+	if (!bmp) {
+		return;
+	}
+
+	Text::Draw(*bmp, padding, padding, *font, *system, 0, this->nametag);
+
+	if (!nametag_sprite) {
+		auto scene_map = Scene::Find(Scene::SceneType::Map);
+		if (scene_map) {
+			auto old_list = &DrawableMgr::GetLocalList();
+			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+			nametag_sprite = std::make_unique<Sprite>();
+			DrawableMgr::SetLocalList(old_list);
+		}
+	}
+
+	if (nametag_sprite) {
+		nametag_sprite->SetBitmap(bmp);
+		nametag_sprite->SetOx(w / 2);
+		nametag_sprite->SetOy(h);
+	}
+}
+
+void MultiplayerCharacter::OnSystemGraphicReady(FileRequestResult* result) 
+{
+	if (result && result->success) {
+		UpdateNametagBitmap();
+	}
+}
+
+void MultiplayerCharacter::SetSystem(const std::string& newsystem) 
+{
+	if (this->systemname != newsystem) {
+		this->systemname = newsystem;
+		if (!this->systemname.empty()) {
+			FileRequestAsync* request = AsyncHandler::RequestFile("System", this->systemname);
+			request->SetGraphicFile(true);
+			system_request_id = request->Bind(&MultiplayerCharacter::OnSystemGraphicReady, this);
+			request->Start();
+		}
+		UpdateNametagBitmap();
+	}
+}
+
+void MultiplayerCharacter::SetNametag(const std::string& newnametag) 
+{
+	if (this->nametag != newnametag) {
+		this->nametag = newnametag;
+		UpdateNametagBitmap();
+	}
 }
 
 void MultiplayerCharacter::MakeCharacter(unsigned int id) 
@@ -118,9 +266,13 @@ void MultiplayerCharacter::RemovePlayer(unsigned int id)
 
 	auto old_list = &DrawableMgr::GetLocalList();
 	auto scene_map = Scene::Find(Scene::SceneType::Map);
-	DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	if (scene_map) {
+		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	}
 	characters.erase(characterIterator);
-	DrawableMgr::SetLocalList(old_list);
+	if (scene_map) {
+		DrawableMgr::SetLocalList(old_list);
+	}
 	Output::Debug("Removed player, id: {}.", id);
 }
 
@@ -135,7 +287,15 @@ std::shared_ptr<MultiplayerCharacter> MultiplayerCharacter::GetPlayer(unsigned i
 
 void MultiplayerCharacter::ClearCharacters() 
 {
+	auto old_list = &DrawableMgr::GetLocalList();
+	auto scene_map = Scene::Find(Scene::SceneType::Map);
+	if (scene_map) {
+		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	}
 	characters.clear();
+	if (scene_map) {
+		DrawableMgr::SetLocalList(old_list);
+	}
 }
 
 float MultiplayerCharacter::GetDistanceToPlayer() 
@@ -169,42 +329,8 @@ std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>> MultiplayerCharact
 float MultiplayerCharacter::soundVolume = 1.0f;
 float MultiplayerCharacter::soundFalloffDistance = 10.0f;
 
-void MultiplayerCharacter::DisplayNametag(BitmapRef& surface, int zoom)
+void FullresDrawPass(BitmapRef&, int) 
 {
-	int x = GetScreenX() - TILE_SIZE / 3;
-	int y = GetScreenY() - TILE_SIZE - TILE_SIZE;
-	Text::Draw(*surface, x * zoom, y * zoom, *Font::Default(), *Cache::System(this->systemname), 0, this->nametag);
-}
-
-void MultiplayerCharacter::FullresPass(BitmapRef& surface, int zoom) 
-{
-	for(auto pair : characters) 
-	{
-		pair.second->DisplayNametag(surface, zoom);
-	}
-}
-
-
-void FullresDrawPass(BitmapRef& display_surface, int zoom) 
-{
-	#ifdef INTEGRATED_CHAT
-	MultiplayerCharacter::FullresPass(display_surface, zoom);
-	if(!Chat::HasInstance()) 
-	{
-		auto scene_map = Scene::Find(Scene::SceneType::Map);
-		if(scene_map != nullptr) 
-		{
-			Chat::MakeInstance(scene_map, zoom);
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "My Love For Hisui Is Constant And Sharp.", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "AAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Test test test", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Blah blah blah", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "АБВ", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "ABC", 16, zoom));
-		}
-	}
-	if(Chat::HasInstance()) Chat::Instance().Draw(*display_surface);
-	#endif
 }
 
 void MultiplayerCharacter::UpdateActor(IActorInfoPacket* packet, int actorIndex) 

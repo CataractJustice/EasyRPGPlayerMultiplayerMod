@@ -22,6 +22,7 @@
 #ifdef INTEGRATED_CHAT
 #include "chat.h"
 #endif
+
 void HandleDataPacket(unsigned char* packetData, int byteLength) 
 {
 	if(sizeof(IDataPacket) > byteLength)
@@ -133,7 +134,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			return;
 		ISystemPacket system;
 		memcpy(&system, packetData, sizeof(ISystemPacket));
-		dataOwnerCharacter->SetSystem(system.systemname);
+		dataOwnerCharacter->SetSystem(std::string(system.systemname, strnlen(system.systemname, max_system_packet_system_name_length)));
 	}
 	break;
 
@@ -155,7 +156,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			return;
 		INametagPacket nametag;
 		memcpy(&nametag, packetData, sizeof(INametagPacket));
-		dataOwnerCharacter->SetNametag(std::string(nametag.nametag));
+		dataOwnerCharacter->SetNametag(std::string(nametag.nametag, strnlen(nametag.nametag, max_nametag_byte_length)));
 	}
 	break;
 
