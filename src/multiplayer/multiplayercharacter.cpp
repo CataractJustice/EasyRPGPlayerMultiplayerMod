@@ -66,9 +66,17 @@ void MultiplayerCharacter::Update()
 		bool visible = this->IsVisible() && !this->nametag.empty();
 		this->nametag_sprite->SetVisible(visible);
 		if (visible) {
+			unsigned int stackHeight = 0;
+			for(auto[id, character] : characters) 
+			{
+				if(id > this->id && character->GetX() == this->GetX() && character->GetY() == this->GetY()) 
+				{
+					stackHeight++;
+				}
+			}
 			this->nametag_sprite->SetX(this->GetScreenX());
 			int chara_height = (this->sprite && this->sprite->GetHeight() > 0) ? this->sprite->GetHeight() : 32;
-			this->nametag_sprite->SetY(this->GetScreenY() - chara_height - 2);
+			this->nametag_sprite->SetY(this->GetScreenY() - chara_height + 10 - (8) * stackHeight);
 			this->nametag_sprite->SetZ(Priority_EventsAbove + 1000);
 			this->nametag_sprite->SetOpacity(this->GetOpacity());
 			this->nametag_sprite->SetTone(Main_Data::game_screen->GetTone());
@@ -116,7 +124,7 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	{
 		actors[i] = nullptr;
 	}
-	this->nametag = "[" + std::to_string(id) + "]";
+	this->nametag = std::to_string(id);
 	this->systemname = (std::string)Main_Data::game_system->GetSystemName();
 	this->id = id;
 	this->SetSpriteGraphic(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
