@@ -10,6 +10,7 @@
 #include "generated/shinonome_mincho.h"
 #include "generated/bitmapfont_rmg2000.h"
 #include "generated/bitmapfont_ttyp0.h"
+#include "generated/bitmapfont_tinyunicode.h"
 
 #ifdef WANT_FONT_BAEKMUK
 #include "generated/bitmapfont_baekmuk.h"

@@ -233,6 +233,7 @@ add_library(${PROJECT_NAME} OBJECT
 	src/generated/bitmapfont_baekmuk.h
 	src/generated/bitmapfont_rmg2000.h
 	src/generated/bitmapfont_ttyp0.h
+	src/generated/bitmapfont_tinyunicode.h
 	src/generated/bitmapfont_wqy.h
 	src/generated/logo.h
 	src/generated/logo2.h

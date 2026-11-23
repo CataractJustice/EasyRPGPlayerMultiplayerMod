@@ -171,7 +171,7 @@ void MultiplayerCharacter::UpdateNametagBitmap()
 		return;
 	}
 
-	FontRef font = Font::Default();
+	FontRef font = Font::Tiny();
 	if (!font) {
 		return;
 	}
@@ -186,7 +186,7 @@ void MultiplayerCharacter::UpdateNametagBitmap()
 		system = Cache::SystemOrBlack();
 	}
 
-	int padding = 2;
+	int padding = 0;
 	int w = text_size.width + padding * 2;
 	int h = text_size.height + padding * 2;
 	BitmapRef bmp = Bitmap::Create(w, h, Color(0, 0, 0, 0));

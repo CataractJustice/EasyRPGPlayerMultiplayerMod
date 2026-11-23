@@ -131,6 +131,12 @@ namespace {
 		return ttyp0 != NULL ? ttyp0 : find_gothic_glyph(code);
 	}
 
+	BitmapFontGlyph const* find_tinyunicode_glyph(char32_t code) 
+	{
+		auto* ttyp0 = find_glyph(BITMAPFONT_TINYUNICODE, code);
+		return ttyp0 != NULL ? ttyp0 : find_ttyp0_glyph(code);
+	}
+
 	struct BitmapFont final : public Font {
 		enum { HEIGHT = 12, FULL_WIDTH = HEIGHT, HALF_WIDTH = FULL_WIDTH / 2 };
 
@@ -216,6 +222,7 @@ namespace {
 	*/
 	FontRef const rmg2000 = std::make_shared<BitmapFont>("RMG2000-compatible", &find_rmg2000_glyph);
 	FontRef const ttyp0 = std::make_shared<BitmapFont>("ttyp0", &find_ttyp0_glyph);
+	FontRef const tiny_font = std::make_shared<BitmapFont>("tinyunicode", &find_tinyunicode_glyph);
 
 	FontRef default_gothic;
 	FontRef default_mincho;
@@ -756,6 +763,11 @@ void FTFont::SetSize(int height, bool create) {
 FontRef Font::Default() {
 	const bool m = (Main_Data::game_system && Main_Data::game_system->GetFontId() == lcf::rpg::System::Font_mincho);
 	return Default(m);
+}
+
+FontRef Font::Tiny() 
+{
+	return tiny_font;
 }
 
 FontRef Font::Default(bool const use_mincho) {
