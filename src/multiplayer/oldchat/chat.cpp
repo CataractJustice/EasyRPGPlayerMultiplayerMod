@@ -12,7 +12,7 @@
 
 #define line_height 12
 #define chat_log_height 1280
-#define CHAR_WIDTH 32
+#define CHAR_WIDTH 16
 
 Chat::Chat(std::shared_ptr<Scene> scene, int zoom) : textInput(SCREEN_TARGET_WIDTH * zoom + 16, SCREEN_TARGET_HEIGHT * zoom - line_height * 2 - 8, CHAT_WIDTH * zoom - 32,  + line_height * 2 + 8, scene)
 {

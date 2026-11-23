@@ -14,7 +14,9 @@
 #include "packets/flashpacket.h"
 #include "packets/systempacket.h"
 #include "packets/actorinfopacket.h"
+#ifdef MULTIPLAYER_CHAT
 #include "chat.h"
+#endif
 void HandleDataPacket(IDataPacket* packet) 
 {
 	if(packet->slot >= DataPacketSlot::lastSlot) 
@@ -76,11 +78,13 @@ void HandleDataPacket(IDataPacket* packet)
 	
 	case DataPacketSlot::chatmsg:
 	{
+		#ifdef MULTIPLAYER_CHAT
 		IChatMsgPacket* msg = (IChatMsgPacket*)packet;
 		if(Chat::HasInstance())
 			Chat::Instance().PushMessage(msg);
+		#endif
 	}
-
+	break;
 	case DataPacketSlot::hidesprite:
 	if(dataOwnerCharacter.get()) 
 	{

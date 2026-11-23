@@ -509,12 +509,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/packets/positionpacket.h
 	src/multiplayer/packets/movespeedpacket.h
 	src/multiplayer/packets/facingpacket.cpp
-	src/multiplayer/packets/chatmsgpacket.cpp
-	src/multiplayer/packets/chatmsgpacket.h
 	src/multiplayer/packets/actorinfopacket.h
 	src/multiplayer/packets/actorinfopacket.cpp
-	src/multiplayer/chat.cpp
-	src/multiplayer/chat.h
 	src/multiplayer/connection.h
 	src/multiplayer/init.cpp
 	src/multiplayer/credentials.h
@@ -524,8 +520,6 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/datapacketshandler.h
 	src/multiplayer/datapacketshandler.cpp
 	src/multiplayer/multiplayercharacter.cpp
-	src/multiplayer/textinput.h
-	src/multiplayer/textinput.cpp
 )
 
 # Multiplayer mod

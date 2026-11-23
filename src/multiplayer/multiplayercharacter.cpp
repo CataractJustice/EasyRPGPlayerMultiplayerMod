@@ -6,9 +6,10 @@
 #include "main_data.h"
 #include "game_system.h"
 #include "game_screen.h"
-#include "chat.h"
 #include "cache.h"
-
+#ifdef MULTIPLAYER_CHAT
+#include "chat.h"
+#endif
 #define MOVE_QUEUE_CAPACITY 8
 
 void MultiplayerCharacter::MultiplayerMove(int x, int y) 
@@ -89,6 +90,7 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
 	sprite = std::make_unique<Sprite_Character>(this);
 	DrawableMgr::SetLocalList(old_list);
+	SetFlash(255, 255, 255, 0, 0);
 	Output::Debug("New Multiplayer Character Created, id: {}.", id);
 }
 
@@ -185,6 +187,7 @@ void MultiplayerCharacter::FullresPass(BitmapRef& surface, int zoom)
 
 void FullresDrawPass(BitmapRef& display_surface, int zoom) 
 {
+	#ifdef MULTIPLAYER_CHAT
 	MultiplayerCharacter::FullresPass(display_surface, zoom);
 	if(!Chat::HasInstance()) 
 	{
@@ -196,11 +199,12 @@ void FullresDrawPass(BitmapRef& display_surface, int zoom)
 			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "AAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 16, zoom));
 			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Test test test", 16, zoom));
 			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Blah blah blah", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Жопа", 16, zoom));
-			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "Shittin N Fartin Shittin N Fartin", 16, zoom));
+			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "АБВ", 16, zoom));
+			Chat::Instance().PushMessage(Message(0, Message::server, "Char0x61", "ABC", 16, zoom));
 		}
 	}
 	if(Chat::HasInstance()) Chat::Instance().Draw(*display_surface);
+	#endif
 }
 
 void MultiplayerCharacter::UpdateActor(IActorInfoPacket* packet, int actorIndex) 

@@ -39,7 +39,6 @@
 
 //multiplayer
 #include "multiplayer/connection.h"
-#include "multiplayer/chat.h"
 #include "multiplayer/packets/systempacket.h"
 
 Game_System::Game_System()
@@ -245,8 +244,10 @@ void Game_System::ReloadSystemGraphic() {
 	request->Start();
 	//Multiplayer
 	sendPacket(OSystemPacket((std::string)GetSystemName()));
+	#ifdef MULTIPLAYER_CHAT
 	if(Chat::HasInstance())
 		Chat::Instance().SetSystem(Cache::System(GetSystemName()));
+	#endif
 }
 
 void Game_System::SetSystemGraphic(const std::string& new_system_name,
