@@ -93,7 +93,7 @@ std::string& Chat::GetInputString()
 void Chat::FireMessage() 
 {
 	if(GetInputString().length() == 0) return;
-	sendPacket(OChatMsgPacket(GetInputString(), DataPacketFlag::broadcastForMap));
+	sendPacket(OChatMsgPacket(GetInputString(), DataPacketFlag::broadcastForMap, false));
 	PushMessage(Message(-1, Message::map, "Me", GetInputString(), 100, zoom));
 	GetInputString().erase();
 }

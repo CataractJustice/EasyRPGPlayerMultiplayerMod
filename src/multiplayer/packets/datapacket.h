@@ -80,6 +80,8 @@ struct IDataPacket : IncomingPacket
 struct ODataPacket : OutgoingPacket
 {
 	unsigned char flags;
+	unsigned int ownerId;
+	unsigned char scope;
 	unsigned short slot;
 	ODataPacket();
 };
