@@ -526,6 +526,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/datapacketshandler.cpp
 	src/multiplayer/multiplayercharacter.cpp
 	src/multiplayer/callbacks.cpp
+	src/multiplayer/settings.h
+	src/multiplayer/settings.cpp
 )
 
 # Multiplayer mod

@@ -4,6 +4,7 @@
 
 void Connect(std::string url, std::string game, Credentials credentials);
 void ConnectionUpdate();
+void onConnect();
 void onMessage(unsigned char* data, unsigned int byteLength);
 void sendMessage(unsigned char* data, unsigned int byteLength);
 template<class T>

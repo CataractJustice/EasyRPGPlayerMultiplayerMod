@@ -2,12 +2,15 @@
 #include "connection.h"
 #include "packets/nametagpacket.h"
 #include "packets/chatmsgpacket.h"
+#include "settings.h"
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten/bind.h>
 void sendName(const std::string& username) {
 	if(username.length() > max_nametag_byte_length - 1) return;
 	ONametagPacket nametagPacket(username);
-    sendMessage((unsigned char*)&nametagPacket, sizeof(nametagPacket));
+	sendMessage((unsigned char*)&nametagPacket, sizeof(nametagPacket));
+	setClientUsername(username);
 }
 
 void sendChatMessage(const std::string& text, const std::string nametag) {

@@ -8,6 +8,7 @@
 #include "packets/disconnectpacket.h"
 #include "datapacketshandler.h"
 #include "init.h"
+#include "settings.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/websocket.h>
 EMSCRIPTEN_WEBSOCKET_T emsocket;
@@ -18,7 +19,7 @@ EM_BOOL onEmOpen(int eventType, const EmscriptenWebSocketOpenEvent *websocketEve
 
 EM_BOOL onEmClose(int eventType, const EmscriptenWebSocketCloseEvent *websocketEvent, void *userData) {
 	emscripten_websocket_deinitialize();
-
+	onConnect();
 	return EM_TRUE;
 }
 
@@ -135,7 +136,7 @@ void ConnectionUpdate()
 		readyState == 1) 
 	{
 		EM_ASM({
-			window.parent.EasyRPGMultiplayer.setConnection("Connected");
+			window.parent.EasyRPGMultiplayer.setConnection(true);
 		});
 	}
 	else 
@@ -146,11 +147,16 @@ void ConnectionUpdate()
 			Connect(getServerURL(), getGameName(), Credentials());
 			reconnectTimeout = 300;
 			EM_ASM({
-				window.parent.EasyRPGMultiplayer.setConnection("Disconnected");
+				window.parent.EasyRPGMultiplayer.setConnection(false);
 			});
 		}
 	}
 	#endif
+}
+
+void onConnect() 
+{
+	sendAllSettings();
 }
 
 void sendMessage(unsigned char* data, unsigned int byteLength) 
