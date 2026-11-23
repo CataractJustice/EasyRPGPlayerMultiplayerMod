@@ -15,6 +15,7 @@
 #include "packets/flashpacket.h"
 #include "packets/systempacket.h"
 #include "packets/actorinfopacket.h"
+#include "packets/nametagpacket.h"
 #ifdef MULTIPLAYER_CHAT
 #include "chat.h"
 #endif
@@ -154,6 +155,18 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		memcpy(&flash, packetData, sizeof(IFlashPacket));
 		dataOwnerCharacter->SetFlash(flash.r, flash.g, flash.b, flash.power, flash.frames);
 	}
+	break;
+
+	case DataPacketSlot::nametag: 
+	if(dataOwnerCharacter.get()) 
+	{
+		if(sizeof(INametagPacket) != byteLength)
+			return;
+		INametagPacket nametag;
+		memcpy(&nametag, packetData, sizeof(INametagPacket));
+		dataOwnerCharacter->SetNametag(std::string(nametag.nametag));
+	}
+	break;
 	
 	default:
 		if(dataOwnerCharacter.get()) 

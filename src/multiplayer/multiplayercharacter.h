@@ -47,6 +47,10 @@ class MultiplayerCharacter : public Game_PlayerBase
 
 	inline void SetSystem(const std::string& systemname) { this->systemname = systemname; }
 
+	inline void SetNametag(const std::string& nametag) { this->nametag = nametag; }
+
+	inline const std::string& GetNametag() const { return this->nametag; }
+
 	static void UpdateCharacters();
 
 	static void FullresPass(BitmapRef& surface, int zoom);

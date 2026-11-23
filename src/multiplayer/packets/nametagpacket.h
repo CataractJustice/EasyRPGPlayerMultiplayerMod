@@ -12,12 +12,7 @@ struct INametagPacket : IDataPacket
 struct ONametagPacket : ODataPacket
 {
 	char nametag[max_nametag_byte_length];
-	ONametagPacket(std::string name) 
-	{
-		memset(nametag, 0, max_nametag_byte_length);
-		memcpy(nametag, name.c_str(), std::min(max_nametag_byte_length, (int)name.lenght()));
-		this->flags = DataPacketFlag::saveForPlayer | DataPacketFlag::broadcastForServer;
-	}
+	ONametagPacket(std::string name);
 };
 
 #pragma pack(pop)

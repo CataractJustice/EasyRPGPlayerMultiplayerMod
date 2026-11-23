@@ -511,6 +511,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/packets/facingpacket.cpp
 	src/multiplayer/packets/actorinfopacket.h
 	src/multiplayer/packets/actorinfopacket.cpp
+	src/multiplayer/packets/nametagpacket.h
+	src/multiplayer/packets/nametagpacket.cpp
 	src/multiplayer/connection.h
 	src/multiplayer/init.cpp
 	src/multiplayer/credentials.h
@@ -520,6 +522,7 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/datapacketshandler.h
 	src/multiplayer/datapacketshandler.cpp
 	src/multiplayer/multiplayercharacter.cpp
+	src/multiplayer/callbacks.cpp
 )
 
 # Multiplayer mod
