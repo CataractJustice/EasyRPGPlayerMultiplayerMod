@@ -14,18 +14,28 @@ std::string getGameName()
 
 	return result ? result : "";
 }
+std::string getServerURL() 
+{
+	const char* result = emscripten_run_script_string(
+		"window.parent.getServerURL()"
+	);
+}
 #else
 std::string getGameName() 
 {
 	/*TO-DO: implement*/
 	return "yumenikki";
 }
+std::string getServerURL() 
+{
+	return "ws://localhost:4040";
+}
 #endif
 
 void MultiplayerStart() 
 {
 	Output::Debug("Multiplayer start");
-	Connect("ws://localhost:4040", getGameName(), Credentials());
+	Connect(getServerURL(), getGameName(), Credentials());
 }
 
 void ChangeMap(int map) 
