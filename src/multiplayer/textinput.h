@@ -20,8 +20,8 @@ class TextInput
 	static TextInput* focused;
 	public:
 	TextInput(int x, int y, int w, int h, std::shared_ptr<Scene> scene);
-	void ProcessTextInput(SDL_Event);
-	void ProcessKeyDown(SDL_Event);
+	void ProcessTextInput(SDL_Event*);
+	void ProcessKeyDown(SDL_Event*);
 	void RefreshInput();
 	inline std::string& GetInput() { return input; };
 	inline void Focus() { focused = this; }

@@ -7,8 +7,7 @@
 #include "packets/inmappacket.h"
 #include "packets/disconnectpacket.h"
 #include "datapacketshandler.h"
-
-#ifdef EMSCRIPTEN
+#ifdef __EMSCRIPTEN__
 #include <emscripten/websocket.h>
 EMSCRIPTEN_WEBSOCKET_T emsocket;
 
@@ -42,7 +41,7 @@ std::mutex packetQLock;
 
 void onMessageAsync(unsigned char* data, unsigned int byteLength) 
 {
-	#ifndef EMSCRIPTEN
+	#ifndef __EMSCRIPTEN__
 	packetQLock.lock();
 	unsigned char* msgcopy = new unsigned char[byteLength];
 	memcpy(msgcopy, data, byteLength);
@@ -55,7 +54,7 @@ void onMessageAsync(unsigned char* data, unsigned int byteLength)
 
 void Connect(std::string url, std::string game, Credentials credentials) 
 {
-	#ifdef EMSCRIPTEN
+	#ifdef __EMSCRIPTEN__
 	//create emscripten WS//
 	EmscriptenWebSocketCreateAttributes ws_attrs = {
 		url.c_str(),
@@ -71,7 +70,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 	ix::initNetSystem();
 	webSocketPtr = new ix::WebSocket();
 	ix::WebSocket& webSocket = *webSocketPtr;
-	webSocket.setUrl("ws://localhost:4040");
+	webSocket.setUrl(url.c_str());
 	webSocket.setHandshakeTimeout(5);
 	webSocket.disablePerMessageDeflate();
 	Output::Debug("Multiplayer Setting WebSocket callbacks.");
@@ -107,7 +106,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 
 void ConnectionUpdate() 
 {
-	#ifndef EMSCRIPTEN
+	#ifndef __EMSCRIPTEN__
 	while (true) 
 	{
 		std::pair<unsigned char*, unsigned int> packetPair = {0,0};
@@ -129,7 +128,7 @@ void ConnectionUpdate()
 
 void sendMessage(unsigned char* data, unsigned int byteLength) 
 {
-	#ifdef EMSCRIPTEN
+	#ifdef __EMSCRIPTEN__
 	emscripten_websocket_send_binary(emsocket, data, byteLength);
 	#else
 	webSocketPtr->sendBinary(ix::IXWebSocketSendData((char*)data, byteLength));
@@ -182,7 +181,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 
 void ConnectionClose()
 {
-	#ifdef EMSCRIPTEN
+	#ifdef __EMSCRIPTEN__
 	#else
 	webSocketPtr->stop();
 	#endif

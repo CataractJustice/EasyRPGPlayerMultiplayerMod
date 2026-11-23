@@ -6,12 +6,13 @@
 #include "drawable_mgr.h"
 #include <string>
 #include <vector>
-#include <SDL2/SDL_events.h>
+#include <SDL3/SDL_events.h>
 #include "connection.h"
 #include "packets/chatmsgpacket.h"
 
 #define line_height 12
 #define chat_log_height 1280
+#define CHAR_WIDTH 32
 
 Chat::Chat(std::shared_ptr<Scene> scene, int zoom) : textInput(SCREEN_TARGET_WIDTH * zoom + 16, SCREEN_TARGET_HEIGHT * zoom - line_height * 2 - 8, CHAT_WIDTH * zoom - 32,  + line_height * 2 + 8, scene)
 {
@@ -217,32 +218,36 @@ void Chat::MakeInstance(std::shared_ptr<Scene> scene, int zoom)
 	Chat::chatInstance = new Chat(scene, zoom);
 }
 
-void Chat::ProcessTextInput(SDL_Event evnt) 
+void Chat::ProcessTextInput(SDL_Event* evnt) 
 {
 	textInput.ProcessTextInput(evnt);
 }
-void Chat::ProcessKeyDown(SDL_Event evnt) 
+
+void Chat::ProcessKeyDown(SDL_Event* evnt)
 {
-	
-	switch (evnt.key.keysym.sym)
+	switch (evnt->key.key)
 	{
-	case SDLK_UP:
-		scroll -= 16;
-		needsRefresh = true;
-	break;
-	case SDLK_DOWN:
-		scroll += 16;
-		needsRefresh = true;
-	break;
-	case SDLK_RETURN:
-		this->FireMessage();
-	break;
-	default:
-		break;
+		case SDLK_UP:
+			scroll -= 16;
+			needsRefresh = true;
+			break;
+
+		case SDLK_DOWN:
+			scroll += 16;
+			needsRefresh = true;
+			break;
+
+		case SDLK_RETURN:
+			this->FireMessage();
+			break;
+
+		default:
+			break;
 	}
 
 	textInput.ProcessKeyDown(evnt);
 }
+
 
 int Chat::Zoom() {return zoom;}
 

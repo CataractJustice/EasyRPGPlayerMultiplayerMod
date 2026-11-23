@@ -76,8 +76,8 @@ class Chat
 	
 	std::string& GetInputString();
 	void FireMessage();
-	void ProcessTextInput(SDL_Event);
-	void ProcessKeyDown(SDL_Event);
+	void ProcessTextInput(SDL_Event*);
+	void ProcessKeyDown(SDL_Event*);
 	
 	inline void SetSystem(BitmapRef system) 
 	{

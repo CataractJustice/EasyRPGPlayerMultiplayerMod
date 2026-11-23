@@ -998,12 +998,7 @@ inline void Game_Actor::SetName(const std::string &new_name) {
 		: lcf::rpg::SaveActor::kEmptyName;
 }
 
-<<<<<<< HEAD
-inline StringView Game_Actor::GetName() const {
-	if(data.ID == 0) return data.name;
-=======
 inline std::string_view Game_Actor::GetName() const {
->>>>>>> 14e1f0484e91fc5d2bab3b36836a7063939bb20d
 	return data.name != lcf::rpg::SaveActor::kEmptyName
 		? std::string_view(data.name)
 		: std::string_view(dbActor->name);

@@ -1,6 +1,6 @@
 #include "textinput.h"
 #include "drawable_mgr.h"
-#include <SDL2/SDL_events.h>
+#include <SDL3/SDL_events.h>
 #include "font.h"
 #include "text.h"
 #include "cache.h"
@@ -18,17 +18,17 @@ TextInput::TextInput(int x, int y, int w, int h, std::shared_ptr<Scene> scene)
 	this->window->SetContents(Bitmap::Create(x, y, w, h));
 }
 
-void TextInput::ProcessTextInput(SDL_Event evnt) 
+void TextInput::ProcessTextInput(SDL_Event* evnt) 
 {
 	if(input.length() >= 511) return;
-	this->input = input.insert(cursor, evnt.text.text);
+	this->input = input.insert(cursor, evnt->text.text);
 	cursor++;
 
 	RefreshInput();
 }
-void TextInput::ProcessKeyDown(SDL_Event evnt) 
+void TextInput::ProcessKeyDown(SDL_Event* evnt) 
 {
-	switch (evnt.key.keysym.sym)
+	switch (evnt->key.key)
 	{
 	case SDLK_LEFT:
 		cursor--;
