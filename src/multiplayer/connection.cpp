@@ -14,12 +14,12 @@
 EMSCRIPTEN_WEBSOCKET_T emsocket;
 
 EM_BOOL onEmOpen(int eventType, const EmscriptenWebSocketOpenEvent *websocketEvent, void *userData) {
+	onConnect();
 	return EM_TRUE;
 }
 
 EM_BOOL onEmClose(int eventType, const EmscriptenWebSocketCloseEvent *websocketEvent, void *userData) {
 	emscripten_websocket_deinitialize();
-	onConnect();
 	return EM_TRUE;
 }
 
