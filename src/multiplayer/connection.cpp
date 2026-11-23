@@ -142,32 +142,40 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 		decmsg += std::to_string((int)data[i]) + " ";
 	}
 	Output::Debug("Multiplayer message: {}", decmsg);
-	IncomingPacket* packet = ((IncomingPacket*)data);
-	switch (packet->type)
+	IncomingPacket packet;
+	memcpy(&packet, data, sizeof(packet));
+	switch (packet.type)
 	{
 	case IPacketType::connect:
 	{
-		ConnectPacket* connectPacket = (ConnectPacket*)packet;
-		MultiplayerCharacter::MakeCharacter(connectPacket->id);
+		if(sizeof(ConnectPacket) != byteLength) return;
+		ConnectPacket connectPacket;
+		memcpy(&connectPacket, &packet, byteLength);
+		MultiplayerCharacter::MakeCharacter(connectPacket.id);
 	}
 		break;
 	case IPacketType::inmap: 
 	{
-		InMapPacket* inMapPacket = (InMapPacket*)packet;
-		MultiplayerCharacter::MakeCharacter(inMapPacket->id);
+		if(sizeof(InMapPacket) != byteLength) return;
+		InMapPacket inMapPacket;
+		memcpy(&inMapPacket, &packet, byteLength);
+		MultiplayerCharacter::MakeCharacter(inMapPacket.id);
 	}
 	break;
 
 	case IPacketType::disconnect:
 	{
-		DisconnectPacket* disconnectPacket = (DisconnectPacket*)packet;
-		MultiplayerCharacter::RemovePlayer(disconnectPacket->id);
+		if(sizeof(DisconnectPacket) != byteLength) return;
+		DisconnectPacket disconnectPacket;
+		memcpy(&disconnectPacket, &packet, byteLength);
+		MultiplayerCharacter::RemovePlayer(disconnectPacket.id);
 	}
 	break;
 
 	case IPacketType::mdata:
 	{
-		HandleDataPacket((IDataPacket*)data);
+		if(sizeof(IDataPacket) < byteLength) return;
+		HandleDataPacket(data, byteLength);
 	}
 	break;
 	
@@ -175,6 +183,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 	{
 		//Multiplayer to-do: save id if it ever going to be needed.
 	}
+	break;
 	}
 }
 

@@ -1,3 +1,4 @@
+#include <cstring>
 #include "output.h"
 #include "multiplayercharacter.h"
 #include "datapacketshandler.h"
@@ -17,114 +18,154 @@
 #ifdef MULTIPLAYER_CHAT
 #include "chat.h"
 #endif
-void HandleDataPacket(IDataPacket* packet) 
+void HandleDataPacket(unsigned char* packetData, int byteLength) 
 {
-	if(packet->slot >= DataPacketSlot::lastSlot) 
+	if(sizeof(IDataPacket) != byteLength)
+		return;
+	IDataPacket packetHeader;
+	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
+
+	if(packetHeader.slot >= DataPacketSlot::lastSlot) 
 	{
-		Output::Warning("Received data with unknown slot {} with owner id {}", packet->slot, packet->ownerId);
+		Output::Warning("Received data with unknown slot {} with owner id {}", packetHeader.slot, packetHeader.ownerId);
 	}
-	std::shared_ptr<MultiplayerCharacter> dataOwnerCharacter = MultiplayerCharacter::GetPlayer(packet->ownerId);
-	switch (packet->slot)
+	std::shared_ptr<MultiplayerCharacter> dataOwnerCharacter = MultiplayerCharacter::GetPlayer(packetHeader.ownerId);
+	switch (packetHeader.slot)
 	{
 	case DataPacketSlot::position:
 		if(dataOwnerCharacter.get()) 
 		{
-			IPositionPacket* pos = (IPositionPacket*)packet;
-			dataOwnerCharacter->MultiplayerMove(pos->x, pos->y);
+			if(sizeof(IPositionPacket) != byteLength)
+				return;
+			IPositionPacket pos;
+			memcpy(&pos, packetData, sizeof(IPositionPacket));
+			dataOwnerCharacter->MultiplayerMove(pos.x, pos.y);
 		}
 		break;
 	case DataPacketSlot::movespeed:
 	if(dataOwnerCharacter.get()) 
 	{
-		IMoveSpeedPacket* speed = (IMoveSpeedPacket*)packet;
-		dataOwnerCharacter->SetMoveSpeed(speed->speed);
+		if(sizeof(IMoveSpeedPacket) != byteLength)
+			return;
+		IMoveSpeedPacket speed;
+		memcpy(&speed, packetData, sizeof(IMoveSpeedPacket));
+		dataOwnerCharacter->SetMoveSpeed(speed.speed);
 	}
 	break;
 	case DataPacketSlot::facing:
 	if(dataOwnerCharacter.get()) 
 	{
-		IFacingPacket* facing = (IFacingPacket*)packet;
-		dataOwnerCharacter->SetFacing(facing->facing);
+		if(sizeof(IFacingPacket) != byteLength)
+			return;
+		IFacingPacket facing;
+		memcpy(&facing, packetData, sizeof(IFacingPacket));
+		dataOwnerCharacter->SetFacing(facing.facing);
 	}
 	break;
 	case DataPacketSlot::sprite:
 	if(dataOwnerCharacter.get()) 
 	{
-		ISpritePacket* sprite = (ISpritePacket*)packet;
-		sprite->sheetname[max_sprite_packet_sheet_name_length - 1] = 0;
-		dataOwnerCharacter->SetSpriteGraphic(std::string(sprite->sheetname), sprite->index);
+		if(sizeof(ISpritePacket) != byteLength)
+			return;
+		ISpritePacket sprite;
+		memcpy(&sprite, packetData, sizeof(ISpritePacket));
+		sprite.sheetname[max_sprite_packet_sheet_name_length - 1] = 0;
+		dataOwnerCharacter->SetSpriteGraphic(std::string(sprite.sheetname), sprite.index);
 	}
 	break;
 	case DataPacketSlot::sound:
 	if(dataOwnerCharacter.get()) 
 	{
-		ISoundPacket* soundPacket = (ISoundPacket*)packet;
+		if(sizeof(ISoundPacket) != byteLength)
+			return;
+		ISoundPacket soundPacket;
+		memcpy(&soundPacket, packetData, sizeof(ISoundPacket));
 		lcf::rpg::Sound sound;
-		soundPacket->soundname[max_sound_packet_sound_name_length - 1] = 0;
-		sound.name = std::string(soundPacket->soundname);
-		sound.volume = soundPacket->volume;
-		sound.tempo = soundPacket->tempo;
-		sound.balance = soundPacket->balance;
+		soundPacket.soundname[max_sound_packet_sound_name_length - 1] = 0;
+		sound.name = std::string(soundPacket.soundname);
+		sound.volume = soundPacket.volume;
+		sound.tempo = soundPacket.tempo;
+		sound.balance = soundPacket.balance;
 		dataOwnerCharacter->PlaySound(sound);
 	}
 	break;
 	case DataPacketSlot::jump:
 	if(dataOwnerCharacter.get()) 
 	{
-		IJumpPacket* jump = (IJumpPacket*)packet;
-		dataOwnerCharacter->Jump(jump->x, jump->y);
+		if(sizeof(IJumpPacket) != byteLength)
+			return;
+		IJumpPacket jump;
+		memcpy(&jump, packetData, sizeof(IJumpPacket));
+		dataOwnerCharacter->Jump(jump.x, jump.y);
 	}
 	break;
 	
 	case DataPacketSlot::chatmsg:
 	{
 		#ifdef MULTIPLAYER_CHAT
-		IChatMsgPacket* msg = (IChatMsgPacket*)packet;
+		if(sizeof(IChatMsgPacket) != byteLength)
+			return;
+		IChatMsgPacket msg;
+		memcpy(&msg, packetData, sizeof(IChatMsgPacket));
 		if(Chat::HasInstance())
-			Chat::Instance().PushMessage(msg);
+			Chat::Instance().PushMessage(&msg);
 		#endif
 	}
 	break;
 	case DataPacketSlot::hidesprite:
 	if(dataOwnerCharacter.get()) 
 	{
-		IHideSpritePacket* hide = (IHideSpritePacket*)packet;
-		dataOwnerCharacter->SetSpriteHidden(hide->hide);
+		if(sizeof(IHideSpritePacket) != byteLength)
+			return;
+		IHideSpritePacket hide;
+		memcpy(&hide, packetData, sizeof(IHideSpritePacket));
+		dataOwnerCharacter->SetSpriteHidden(hide.hide);
 	}
 	break;
 
 	case DataPacketSlot::transparency:
 	if(dataOwnerCharacter.get()) 
 	{
-		ITransparencyPacket* transparency = (ITransparencyPacket*)packet;
-		dataOwnerCharacter->SetTransparency(transparency->transparency);
+		if(sizeof(ITransparencyPacket) != byteLength)
+			return;
+		ITransparencyPacket transparency;
+		memcpy(&transparency, packetData, sizeof(ITransparencyPacket));
+		dataOwnerCharacter->SetTransparency(transparency.transparency);
 	}
 	break;
 
 	case DataPacketSlot::system:
 	if(dataOwnerCharacter.get()) 
 	{
-		ISystemPacket* system = (ISystemPacket*)packet;
-		dataOwnerCharacter->SetSystem(system->systemname);
+		if(sizeof(ISystemPacket) != byteLength)
+			return;
+		ISystemPacket system;
+		memcpy(&system, packetData, sizeof(ISystemPacket));
+		dataOwnerCharacter->SetSystem(system.systemname);
 	}
 	break;
 
 	case DataPacketSlot::pflash:
 	if(dataOwnerCharacter.get()) 
 	{
-		IFlashPacket* flash = (IFlashPacket*)packet;
-		flash->scope;
-		dataOwnerCharacter->SetFlash(flash->r, flash->g, flash->b, flash->power, flash->frames);
+		if(sizeof(IFlashPacket) != byteLength)
+			return;
+		IFlashPacket flash;
+		memcpy(&flash, packetData, sizeof(IFlashPacket));
+		dataOwnerCharacter->SetFlash(flash.r, flash.g, flash.b, flash.power, flash.frames);
 	}
 	
 	default:
 		if(dataOwnerCharacter.get()) 
 		{
-			if(packet->slot >= DataPacketSlot::actorinfo0 && packet->slot <= DataPacketSlot::actorinfoLast) 
+			if(packetHeader.slot >= DataPacketSlot::actorinfo0 && packetHeader.slot <= DataPacketSlot::actorinfoLast) 
 			{
-				int actorIndex = packet->slot - DataPacketSlot::actorinfo0;
-				
-				dataOwnerCharacter->UpdateActor((IActorInfoPacket*)packet, actorIndex);
+				int actorIndex = packetHeader.slot - DataPacketSlot::actorinfo0;
+				if(sizeof(IActorInfoPacket) != byteLength)
+					return;
+				IActorInfoPacket actorInfo;
+				memcpy(&actorInfo, packetData, sizeof(IActorInfoPacket));
+				dataOwnerCharacter->UpdateActor(&actorInfo, actorIndex);
 			}
 		}
 		break;

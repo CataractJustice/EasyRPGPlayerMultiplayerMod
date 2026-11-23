@@ -1,3 +1,3 @@
 struct IDataPacket;
 
-void HandleDataPacket(IDataPacket* packet);
+void HandleDataPacket(unsigned char* packet, int byteLength);
