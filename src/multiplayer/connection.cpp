@@ -7,6 +7,7 @@
 #include "packets/inmappacket.h"
 #include "packets/disconnectpacket.h"
 #include "datapacketshandler.h"
+#include "init.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/websocket.h>
 EMSCRIPTEN_WEBSOCKET_T emsocket;
@@ -104,6 +105,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 	#endif
 }
 
+int reconnectTimeout = 200;
 
 void ConnectionUpdate() 
 {
@@ -124,13 +126,45 @@ void ConnectionUpdate()
 		onMessage(packetPair.first, packetPair.second);
 		delete[] packetPair.first;
 	}
+	#else
+	unsigned short readyState = 0;
+
+	if (emsocket != 0 &&
+		emscripten_websocket_get_ready_state(emsocket, &readyState)
+			== EMSCRIPTEN_RESULT_SUCCESS &&
+		readyState == 1) 
+	{
+		EM_ASM({
+			window.parent.EasyRPGMultiplayer.setConnection("Connected");
+		});
+	}
+	else 
+	{
+		reconnectTimeout--;
+		if(reconnectTimeout <= 0) 
+		{
+			Connect(getServerURL(), getGameName(), Credentials());
+			reconnectTimeout = 300;
+			EM_ASM({
+				window.parent.EasyRPGMultiplayer.setConnection("Disconnected");
+			});
+		}
+	}
 	#endif
 }
 
 void sendMessage(unsigned char* data, unsigned int byteLength) 
 {
 	#ifdef __EMSCRIPTEN__
-	emscripten_websocket_send_binary(emsocket, data, byteLength);
+	unsigned short readyState = 0;
+
+	if (emsocket != 0 &&
+		emscripten_websocket_get_ready_state(emsocket, &readyState)
+			== EMSCRIPTEN_RESULT_SUCCESS &&
+		readyState == 1) {
+
+		emscripten_websocket_send_binary(emsocket, data, byteLength);
+	}
 	#else
 	webSocketPtr->sendBinary(ix::IXWebSocketSendData((char*)data, byteLength));
 	#endif
