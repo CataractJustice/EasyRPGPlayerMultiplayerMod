@@ -19,6 +19,7 @@ std::string getServerURL()
 	const char* result = emscripten_run_script_string(
 		"window.parent.getServerURL()"
 	);
+	return result ? result : "";
 }
 #else
 std::string getGameName() 
@@ -36,6 +37,7 @@ void MultiplayerStart()
 {
 	Output::Debug("Multiplayer start");
 	Connect(getServerURL(), getGameName(), Credentials());
+	Output::Debug("Multiplayer started");
 }
 
 void ChangeMap(int map) 

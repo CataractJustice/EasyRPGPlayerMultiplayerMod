@@ -74,6 +74,7 @@ void Window_MenuStatus::Refresh() {
 
 	//Multiplayer menu actors
 	//This will draw players in your multiplayer party and theirs party characters
+	#ifdef MULTIPLAYER_PARTIES
 	for (int i = 0; i < MultiplayerCharacter::GetAllParties().size(); ++i) {
 		const Game_Actor& actor = *(MultiplayerCharacter::GetAllParties()[i]);//*(Main_Data::game_party->GetActors()[i]);
 		
@@ -98,6 +99,7 @@ void Window_MenuStatus::Refresh() {
 
 		y += 10;
 	}
+	#endif
 }
 
 void Window_MenuStatus::UpdateCursorRect()

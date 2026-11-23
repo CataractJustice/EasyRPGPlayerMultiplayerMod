@@ -513,6 +513,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/packets/actorinfopacket.cpp
 	src/multiplayer/packets/nametagpacket.h
 	src/multiplayer/packets/nametagpacket.cpp
+	src/multiplayer/packets/chatmsgpacket.h
+	src/multiplayer/packets/chatmsgpacket.cpp
 	src/multiplayer/connection.h
 	src/multiplayer/init.cpp
 	src/multiplayer/credentials.h

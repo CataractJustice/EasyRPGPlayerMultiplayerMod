@@ -1727,7 +1727,9 @@ bool Game_Interpreter::CommandChangePartyMember(lcf::rpg::EventCommand const& co
 	if (com.parameters[0] == 0) {
 		// Add members
 		Main_Data::game_party->AddActor(id);
+		#ifdef MULTIPLAYER_PARTIES
 		sendPacket(OActorInfoPacket(actor, Main_Data::game_party->GetActors().size()));
+		#endif
 
 	} else {
 		// Remove members

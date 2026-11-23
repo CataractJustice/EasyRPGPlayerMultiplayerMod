@@ -16,16 +16,19 @@
 #include "packets/systempacket.h"
 #include "packets/actorinfopacket.h"
 #include "packets/nametagpacket.h"
-#ifdef MULTIPLAYER_CHAT
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+#ifdef INTEGRATED_CHAT
 #include "chat.h"
 #endif
 void HandleDataPacket(unsigned char* packetData, int byteLength) 
 {
-	if(sizeof(IDataPacket) != byteLength)
+	if(sizeof(IDataPacket) > byteLength)
 		return;
 	IDataPacket packetHeader;
 	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
-
+	Output::Debug("New packet data with byteLength="+std::to_string(byteLength) + " and slot " + std::to_string(packetHeader.slot) + " and ownerId="+std::to_string(packetHeader.ownerId));
 	if(packetHeader.slot >= DataPacketSlot::lastSlot) 
 	{
 		Output::Warning("Received data with unknown slot {} with owner id {}", packetHeader.slot, packetHeader.ownerId);
@@ -42,7 +45,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			memcpy(&pos, packetData, sizeof(IPositionPacket));
 			dataOwnerCharacter->MultiplayerMove(pos.x, pos.y);
 		}
-		break;
+	break;
 	case DataPacketSlot::movespeed:
 	if(dataOwnerCharacter.get()) 
 	{
@@ -100,19 +103,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		dataOwnerCharacter->Jump(jump.x, jump.y);
 	}
 	break;
-	
-	case DataPacketSlot::chatmsg:
-	{
-		#ifdef MULTIPLAYER_CHAT
-		if(sizeof(IChatMsgPacket) != byteLength)
-			return;
-		IChatMsgPacket msg;
-		memcpy(&msg, packetData, sizeof(IChatMsgPacket));
-		if(Chat::HasInstance())
-			Chat::Instance().PushMessage(&msg);
-		#endif
-	}
-	break;
+
 	case DataPacketSlot::hidesprite:
 	if(dataOwnerCharacter.get()) 
 	{
@@ -167,8 +158,34 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		dataOwnerCharacter->SetNametag(std::string(nametag.nametag));
 	}
 	break;
+
+	case DataPacketSlot::chatmsg:
+	{
+		IChatMsgPacket msg;
+		memcpy(&msg, packetData, sizeof(IChatMsgPacket));
+		#ifdef __EMSCRIPTEN__
+		#ifdef INTEGRATED_CHAT
+		if(sizeof(IChatMsgPacket) != byteLength)
+			return;
+		if(Chat::HasInstance())
+			Chat::Instance().PushMessage(&msg);
+		#else
+		msg.nametag[max_nametag_byte_length - 1] = 0;
+		msg.message[max_chat_message_length - 1] = 0;
+		std::string author = dataOwnerCharacter.get() ? dataOwnerCharacter->GetNametag() : std::string(msg.nametag);
+		EM_ASM({
+			window.parent.EasyRPGMultiplayer.receiveMessage({
+				author: UTF8ToString($0),
+				message: UTF8ToString($1)
+			});
+		}, author.c_str(), msg.message);
+		#endif
+		#endif
+	}
+	break;
 	
 	default:
+	#ifdef MULTIPLAYER_PARTIES
 		if(dataOwnerCharacter.get()) 
 		{
 			if(packetHeader.slot >= DataPacketSlot::actorinfo0 && packetHeader.slot <= DataPacketSlot::actorinfoLast) 
@@ -182,5 +199,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			}
 		}
 		break;
+	#endif
+	break;
 	}
 }

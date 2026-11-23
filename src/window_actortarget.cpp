@@ -54,6 +54,7 @@ void Window_ActorTarget::Refresh() {
 
 	//Multiplayer actor targets
 	//This will draw players in your multiplayer party and theirs party characters
+	#ifdef MULTIPLAYER_PARTIES
 	for (int i = 0; i < item_max; ++i) {
 		const Game_Actor& actor = *(MultiplayerCharacter::GetAllParties()[i]);//*(Main_Data::game_party->GetActors()[i]);
 		DrawActorFace(actor, 0, i * 48 + y);
@@ -67,6 +68,7 @@ void Window_ActorTarget::Refresh() {
 
 		y += 10;
 	}
+	#endif
 }
 
 void Window_ActorTarget::UpdateCursorRect() {

@@ -54,6 +54,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 {
 	std::string connectionURL = url + "?game=" + game;
 	#ifdef __EMSCRIPTEN__
+	Output::Debug("Creating web socket");
 	//create emscripten WS//
 	EmscriptenWebSocketCreateAttributes ws_attrs = {
 		connectionURL.c_str(),
@@ -61,6 +62,7 @@ void Connect(std::string url, std::string game, Credentials credentials)
 		EM_TRUE
 	};
 
+	Output::Debug("Setting up callbacks");
 	emsocket = emscripten_websocket_new(&ws_attrs);
 	emscripten_websocket_set_onopen_callback(emsocket, NULL, onEmOpen);
 	emscripten_websocket_set_onclose_callback(emsocket, NULL, onEmClose);
@@ -150,7 +152,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 	{
 		if(sizeof(ConnectPacket) != byteLength) return;
 		ConnectPacket connectPacket;
-		memcpy(&connectPacket, &packet, byteLength);
+		memcpy(&connectPacket, data, byteLength);
 		MultiplayerCharacter::MakeCharacter(connectPacket.id);
 	}
 		break;
@@ -158,7 +160,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 	{
 		if(sizeof(InMapPacket) != byteLength) return;
 		InMapPacket inMapPacket;
-		memcpy(&inMapPacket, &packet, byteLength);
+		memcpy(&inMapPacket, data, byteLength);
 		MultiplayerCharacter::MakeCharacter(inMapPacket.id);
 	}
 	break;
@@ -167,14 +169,15 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 	{
 		if(sizeof(DisconnectPacket) != byteLength) return;
 		DisconnectPacket disconnectPacket;
-		memcpy(&disconnectPacket, &packet, byteLength);
+		memcpy(&disconnectPacket, data, byteLength);
 		MultiplayerCharacter::RemovePlayer(disconnectPacket.id);
 	}
 	break;
 
 	case IPacketType::mdata:
 	{
-		if(sizeof(IDataPacket) < byteLength) return;
+		if(sizeof(IDataPacket) > byteLength) return;
+		Output::Debug("Data packet received");
 		HandleDataPacket(data, byteLength);
 	}
 	break;

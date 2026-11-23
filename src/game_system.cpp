@@ -244,7 +244,7 @@ void Game_System::ReloadSystemGraphic() {
 	request->Start();
 	//Multiplayer
 	sendPacket(OSystemPacket((std::string)GetSystemName()));
-	#ifdef MULTIPLAYER_CHAT
+	#ifdef INTEGRATED_CHAT
 	if(Chat::HasInstance())
 		Chat::Instance().SetSystem(Cache::System(GetSystemName()));
 	#endif

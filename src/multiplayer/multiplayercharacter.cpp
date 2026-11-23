@@ -7,7 +7,7 @@
 #include "game_system.h"
 #include "game_screen.h"
 #include "cache.h"
-#ifdef MULTIPLAYER_CHAT
+#ifdef INTEGRATED_CHAT
 #include "chat.h"
 #endif
 #define MOVE_QUEUE_CAPACITY 8
@@ -187,7 +187,7 @@ void MultiplayerCharacter::FullresPass(BitmapRef& surface, int zoom)
 
 void FullresDrawPass(BitmapRef& display_surface, int zoom) 
 {
-	#ifdef MULTIPLAYER_CHAT
+	#ifdef INTEGRATED_CHAT
 	MultiplayerCharacter::FullresPass(display_surface, zoom);
 	if(!Chat::HasInstance()) 
 	{

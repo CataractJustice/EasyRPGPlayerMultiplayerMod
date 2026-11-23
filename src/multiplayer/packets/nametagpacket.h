@@ -1,3 +1,4 @@
+#pragma once
 #include "datapacket.h"
 #include <memory.h>
 #include <string>
