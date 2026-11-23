@@ -10,9 +10,10 @@ void sendName(const std::string& username) {
     sendMessage((unsigned char*)&nametagPacket, sizeof(nametagPacket));
 }
 
-void sendChatMessage(const std::string& text, const std::string nametag) {
+void sendChatMessage(const std::string& text, const std::string nametag, bool isGlobal) {
 	if(text.length() > max_chat_message_length - 1) return;
-	OChatMsgPacket chatPacket(text, nametag, DataPacketFlag::broadcastForGame);
+	unsigned char flags = isGlobal ? DataPacketFlag::broadcastForGame : DataPacketFlag::broadcastForMap;
+	OChatMsgPacket chatPacket(text, nametag, flags, isGlobal);
     sendMessage((unsigned char*)&chatPacket, sizeof(chatPacket));
 }
 
