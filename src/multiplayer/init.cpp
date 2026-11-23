@@ -4,6 +4,7 @@
 #include "packets/mappacket.h"
 #include "multiplayer/multiplayercharacter.h"
 #include <emscripten.h>
+#include "settings.h"
 
 #ifdef __EMSCRIPTEN__
 std::string getGameName()
@@ -44,6 +45,7 @@ void ChangeMap(int map)
 {
 	MultiplayerCharacter::ClearCharacters();
 	sendPacket(MapPacket(map));
+	setCurrentMapId(map);
 }
 
 void MultiplayerUpdate() 
