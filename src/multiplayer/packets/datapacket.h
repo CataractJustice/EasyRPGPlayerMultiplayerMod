@@ -27,11 +27,12 @@ struct DataPacketScope
 {
 	enum Scope 
 	{
+		responce,
+		personal,
 		map,
 		game,
 		server,
 		direct,
-		responce
 	};
 };
 
@@ -80,7 +81,6 @@ struct IDataPacket : IncomingPacket
 struct ODataPacket : OutgoingPacket
 {
 	unsigned char flags;
-	unsigned int ownerId;
 	unsigned short slot;
 	ODataPacket();
 };
