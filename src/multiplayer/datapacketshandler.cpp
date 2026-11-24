@@ -16,6 +16,7 @@
 #include "packets/systempacket.h"
 #include "packets/actorinfopacket.h"
 #include "packets/nametagpacket.h"
+#include "settings.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -28,6 +29,14 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 	if(sizeof(IDataPacket) > byteLength)
 		return;
 	IDataPacket packetHeader;
+	if(
+		!(packetHeader.scope & DataPacketFlag::broadcastForGame) && 
+		!(packetHeader.scope & DataPacketFlag::broadcastForServer) &&
+		packetHeader.mapId != getCurrentMapId()
+	) 
+	{
+		return;
+	}
 	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
 	Output::Debug("New packet data with byteLength="+std::to_string(byteLength) + " and slot " + std::to_string(packetHeader.slot) + " and ownerId="+std::to_string(packetHeader.ownerId));
 	if(packetHeader.slot >= DataPacketSlot::lastSlot) 

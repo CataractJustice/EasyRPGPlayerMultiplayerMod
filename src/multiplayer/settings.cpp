@@ -2,6 +2,7 @@
 #include "connection.h"
 #include "packets/nametagpacket.h"
 #include "init.h"
+#include <emscripten.h>
 
 std::string clientUsername = "";
 int currentMapId = -1;
@@ -19,6 +20,11 @@ void setClientUsername(const std::string& username)
 void setCurrentMapId(int map) 
 {
 	currentMapId = map;
+	#ifdef __EMSCRIPTEN__
+	EM_ASM({
+		window.parent.EasyRPGMultiplayer.setMapIdStatus(UTF8ToString($0));
+	}, std::to_string(map).c_str());
+	#endif
 }
 
 int getCurrentMapId() 

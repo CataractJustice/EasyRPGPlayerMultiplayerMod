@@ -74,6 +74,7 @@ struct IDataPacket : IncomingPacket
 {
 	unsigned char scope;
 	unsigned int ownerId;
+	unsigned int mapId;
 	unsigned short slot;
 };
 
