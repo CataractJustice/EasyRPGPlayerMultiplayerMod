@@ -532,6 +532,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/nametags.cpp
 	src/multiplayer/settings_scene.h
 	src/multiplayer/settings_scene.cpp
+	src/multiplayer/textbubble.h
+	src/multiplayer/textbubble.cpp
 )
 
 # Multiplayer mod

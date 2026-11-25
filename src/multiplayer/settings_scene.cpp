@@ -64,6 +64,13 @@ namespace Game_Multiplayer {
 		items.push_back(std::make_unique<ActionOption>("Global chat", "Toggle global chat visibility", &ToggleGlobalChatVisivility));
 		items.push_back(std::make_unique<ActionOption>("Reconnect", "Disconnect, clear players & connect again", &Reconnect));
 
+		items.push_back(std::make_unique<SwitchOption>("Chat bubbles", "Show sent messages above players who sent them", &Settings::chatBubbles));
+		items.push_back(std::make_unique<RangeOption>("Chat bubble show frames", "How long chat bubble should stay before fading away", &Settings::chatBubbleFramesBeforeFade, 20, 240, 20));
+		items.push_back(std::make_unique<RangeOption>("Chat bubble fade frames", "How long does it take chat bubble to fade", &Settings::chatBubbleFadeFrames, 0, 240, 20));
+		items.push_back(std::make_unique<RangeOption>("Chat bubble float speed", "How fast should chat bubble float up", &Settings::chatBubbleFloatSpeed, 0, 16, 1));
+	int chatBubbleFadeFrames = 60;
+	int chatBubbleFramesBeforeFade = 60;
+	int chatBubbleFloatSpeed = 2;
 		this->item_max = items.size();
 		CreateContents();
 		SetEndlessScrolling(false);

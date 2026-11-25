@@ -119,6 +119,20 @@ void MultiplayerCharacter::Update()
 			SetY(nextMove.second);
 		}
 	}
+
+	// Update and remove message bubbles
+	auto scene_map = Scene::Find(Scene::SceneType::Map);
+    for (auto it = text_bubbles.begin(); it != text_bubbles.end(); ) {
+        it->get()->Update();
+        if (it->get()->GetShouldBeDestroyed()) {
+			auto old_list = &DrawableMgr::GetLocalList();
+			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+            it = text_bubbles.erase(it);
+			DrawableMgr::SetLocalList(old_list);
+        } else {
+            ++it;
+        }
+    }
 }
 
 void MultiplayerCharacter::UpdateNextMovementAction() {};
@@ -322,6 +336,26 @@ std::vector<Game_Actor*> MultiplayerCharacter::GetAllParties()
 		}
 	}
 	return mpPartyActors;
+}
+
+void MultiplayerCharacter::CreateMessageBubble(const std::string text) 
+{
+	if(text_bubbles.empty() == false) 
+	{
+		text_bubbles.back()->FadeNow();
+	}
+	auto old_list = &DrawableMgr::GetLocalList();
+	auto scene_map = Scene::Find(Scene::SceneType::Map);
+	if (scene_map) {
+		DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
+	}
+
+	// Create a new TextBubble and add it to the list
+	text_bubbles.push_back(std::make_unique<TextBubble>(text, this));
+
+	if (scene_map) {
+		DrawableMgr::SetLocalList(old_list);
+	}
 }
 
 void MultiplayerCharacter::OnMapDispose() 

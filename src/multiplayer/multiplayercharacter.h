@@ -10,6 +10,7 @@
 #include <queue>
 #include <string>
 #include <memory>
+#include "textbubble.h"
 
 class MultiplayerCharacter : public Game_PlayerBase
 {
@@ -20,6 +21,7 @@ private:
 	std::queue<std::pair<int, int>> moveQueue;
 	int flashR, flashG, flashB, flashP, flashT;
 	Game_Actor* actors[ACTOR_SLOTS];
+    std::vector<std::unique_ptr<TextBubble>> text_bubbles;
 
 	FileRequestBinding system_request_id;
 
@@ -75,4 +77,5 @@ public:
 	static std::vector<Game_Actor*> GetAllParties();
 
 	static void OnMapDispose();
+	void CreateMessageBubble(const std::string text);
 };

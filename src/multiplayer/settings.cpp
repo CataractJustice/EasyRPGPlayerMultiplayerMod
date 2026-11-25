@@ -28,6 +28,10 @@ namespace Settings
 	bool drawOwnNametag = true;
 	bool drawOtherNametags = true;
 	bool nametagSystemSync = true;
+	bool chatBubbles = true;
+	int chatBubbleFadeFrames = 60;
+	int chatBubbleFramesBeforeFade = 60;
+	int chatBubbleFloatSpeed = 4;
 }
 
 std::string clientUsername = "";

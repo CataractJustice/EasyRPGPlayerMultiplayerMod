@@ -13,6 +13,10 @@ namespace Settings
 	extern bool drawOwnNametag;
 	extern bool drawOtherNametags;
 	extern bool nametagSystemSync;
+	extern bool chatBubbles;
+	extern int chatBubbleFadeFrames;
+	extern int chatBubbleFramesBeforeFade;
+	extern int chatBubbleFloatSpeed;
 }
 
 void sendAllSettings();

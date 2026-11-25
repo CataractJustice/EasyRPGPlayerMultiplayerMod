@@ -184,6 +184,10 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		msg.message[max_chat_message_length - 1] = 0;
 		bool isGlobal = msg.scope == DataPacketScope::game;
 		std::string author = dataOwnerCharacter.get() ? dataOwnerCharacter->GetNametag() : std::string(msg.nametag);
+		if(dataOwnerCharacter.get() && Settings::chatBubbles) 
+		{
+			dataOwnerCharacter->CreateMessageBubble(std::string(msg.message));
+		}
 		#ifdef __EMSCRIPTEN__
 		#ifdef INTEGRATED_CHAT
 		if(Chat::HasInstance())
