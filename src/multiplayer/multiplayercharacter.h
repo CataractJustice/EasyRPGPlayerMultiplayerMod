@@ -75,7 +75,4 @@ public:
 	static std::vector<Game_Actor*> GetAllParties();
 
 	static void OnMapDispose();
-
-	static float soundFalloffDistance;
-	static float soundVolume;
 };

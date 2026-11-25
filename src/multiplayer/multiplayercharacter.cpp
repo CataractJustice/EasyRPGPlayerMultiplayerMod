@@ -281,15 +281,12 @@ void MultiplayerCharacter::PlaySound(lcf::rpg::Sound sound)
 {
 	float l = GetDistanceToPlayer();
 
-	sound.volume = sound.volume * MultiplayerCharacter::soundVolume * std::max(1.0f - l / MultiplayerCharacter::soundFalloffDistance, 0.0f);
+	sound.volume = sound.volume * ((float)Settings::sfxVolume) * 0.01f * std::max(1.0f - l / ((float)Settings::sfxDistance), 0.0f);
 
 	Main_Data::game_system->SePlay(sound);
 }
 
 std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>> MultiplayerCharacter::characters = std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>>();
-
-float MultiplayerCharacter::soundVolume = 1.0f;
-float MultiplayerCharacter::soundFalloffDistance = 10.0f;
 
 void FullresDrawPass(BitmapRef&, int) 
 {
