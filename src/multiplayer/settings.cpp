@@ -37,6 +37,11 @@ namespace Settings
 std::string clientUsername = "";
 int currentMapId = -1;
 
+std::string customSpriteSheet = "";
+int customSpriteIndex = -1;
+std::string realSpriteSheet = "";
+int realSpriteIndex = -1;
+
 std::unique_ptr<Sprite> own_nametag_sprite;
 
 const std::string& getClientUsername() 
@@ -133,4 +138,35 @@ bool getShouldDisplayNametags()
 void setShouldDisplayNametags(bool value) 
 {
 	Settings::drawOtherNametags = value;
+}
+
+bool hasCustomSprite() 
+{
+	return !customSpriteSheet.empty() && customSpriteIndex >= 0;
+}
+void setCustomSprite(const std::string& sheet, int index) 
+{
+	customSpriteSheet = sheet;
+	customSpriteIndex = index;
+	Main_Data::game_player->SetSpriteGraphic(customSpriteSheet, customSpriteIndex);
+}
+void restoreRealSprite() 
+{
+	customSpriteSheet = "";
+	customSpriteIndex = -1;
+	if(!realSpriteSheet.empty() && realSpriteIndex >= 0) 
+	{
+		Main_Data::game_player->SetSpriteGraphic(realSpriteSheet, realSpriteIndex);
+	}
+}
+void storeRealSprite(const std::string& sheet, int index) 
+{
+	realSpriteSheet = sheet;
+	realSpriteIndex = index;
+}
+
+void getCustomSprite(std::string& sheet, int& index) 
+{
+	sheet = customSpriteSheet;
+	index = customSpriteIndex;
 }

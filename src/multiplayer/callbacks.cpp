@@ -29,5 +29,7 @@ EMSCRIPTEN_BINDINGS(my_module) {
     emscripten::function("sendName", &sendName);
     emscripten::function("sendChatMessage", &sendChatMessage);
 	emscripten::function("setShowOwnNametag", &setShowOwnNametag);
+	emscripten::function("setOwnSprite", &setCustomSprite);
+	emscripten::function("unsetOwnSprite", &restoreRealSprite);
 }
 #endif

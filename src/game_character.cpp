@@ -45,6 +45,7 @@
 #include "multiplayer/packets/flashpacket.h"
 #include "multiplayer/packets/hidespritepacket.h"
 #include "multiplayer/packets/transparencypacket.h"
+#include "multiplayer/settings.h"
 
 Game_Character::Game_Character(Type type, lcf::rpg::SaveMapEventBase* d) :
 	_type(type), _data(d)
@@ -1277,8 +1278,18 @@ void Game_Character::SetMoveSpeed(int speed) {
 }
 
 void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
-	if(data()->sprite_id != index || data()->sprite_name != sprite_name)
-		if(GetType() == Player) sendPacket(OSpritePacket(sprite_name, index));
+	if(data()->sprite_id != index || data()->sprite_name != sprite_name) 
+	{
+		if(GetType() == Player) 
+		{
+			sendPacket(OSpritePacket(sprite_name, index));
+			if(hasCustomSprite()) 
+			{
+				getCustomSprite(data()->sprite_name, data()->sprite_id);
+				return;
+			}
+		}
+	}
 	data()->sprite_name = std::move(sprite_name);
 	data()->sprite_id = index;
 }

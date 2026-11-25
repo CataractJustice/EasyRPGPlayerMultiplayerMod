@@ -33,3 +33,9 @@ bool getShouldDisplayNametags();
 void setShouldDisplayNametags(bool value);
 void updateOwnNametag();
 void updateOwnNametagBitmap();
+
+bool hasCustomSprite();
+void setCustomSprite(const std::string& sheet, int index);
+void restoreRealSprite();
+void storeRealSprite(const std::string& sheet, int index);
+void getCustomSprite(std::string& sheet, int& index);
