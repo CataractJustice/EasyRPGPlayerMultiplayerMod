@@ -177,7 +177,6 @@ namespace Game_Multiplayer {
 			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Cursor));
 		}
 
-		//for some reason i can't get std::clamp to work???
 		if(*(this->range) > this->max) *(this->range) = this->max;
 		if(*(this->range) < this->min) *(this->range) = this->min;
 
