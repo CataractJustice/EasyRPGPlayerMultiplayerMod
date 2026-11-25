@@ -15,9 +15,23 @@
 #include "game_screen.h"
 #include "game_system.h"
 #include "nametags.h"
+
+namespace Settings 
+{
+	bool sfxSync = true;
+	int sfxVolume = 100;
+	int sfxDistance = 10;
+	bool npcSync = false;
+	bool eventSync = false;
+	bool npcSpriteSync = true;
+	bool npcActivitySync = false;
+	bool drawOwnNametag = true;
+	bool drawOtherNametags = true;
+	bool nametagSystemSync = true;
+}
+
 std::string clientUsername = "";
 int currentMapId = -1;
-bool shouldDisplayOwnNametag = true;
 
 std::unique_ptr<Sprite> own_nametag_sprite;
 
@@ -68,12 +82,12 @@ void sendAllSettings()
 
 bool getShouldDisplayOwnNametag() 
 {
-	return shouldDisplayOwnNametag;
+	return Settings::drawOwnNametag;
 }
 
 void setShouldDisplayOwnNametag(bool value) 
 {
-	shouldDisplayOwnNametag = value;
+	Settings::drawOwnNametag = value;
 }
 
 void updateOwnNametag() 
@@ -106,4 +120,13 @@ void updateOwnNametag()
 void updateOwnNametagBitmap() 
 {
 	Nametags::UpdateNametagBitmap(*own_nametag_sprite, clientUsername, std::string(Main_Data::game_system->GetSystemName()), Main_Data::game_player.get());
+}
+
+bool getShouldDisplayNametags() 
+{
+	return Settings::drawOtherNametags;
+}
+void setShouldDisplayNametags(bool value) 
+{
+	Settings::drawOtherNametags = value;
 }

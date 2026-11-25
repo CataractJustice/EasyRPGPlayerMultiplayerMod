@@ -11,6 +11,7 @@
 #include "async_handler.h"
 #include "nametags.h"
 #include <cmath>
+#include "settings.h"
 
 #define MOVE_QUEUE_CAPACITY 8
 
@@ -64,11 +65,11 @@ void MultiplayerCharacter::Update()
 	}
 
 	if (this->nametag_sprite) {
-		bool visible = this->IsVisible() && !this->nametag.empty();
+		bool visible = getShouldDisplayNametags() && this->IsVisible() && !this->nametag.empty();
 		this->nametag_sprite->SetVisible(visible);
 		if (visible) {
 			unsigned int stackHeight = 0;
-			if(this->GetX() == Main_Data::game_player->GetX() && this->GetY() == Main_Data::game_player->GetY()) 
+			if(getShouldDisplayOwnNametag() && this->GetX() == Main_Data::game_player->GetX() && this->GetY() == Main_Data::game_player->GetY()) 
 			{
 				stackHeight++;
 			}

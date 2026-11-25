@@ -69,6 +69,7 @@ public:
 		// EasyRPG extra
 		Debug = 100,
 		Settings = 101,
+		Multiplayer = 102
 	};
 
 private:

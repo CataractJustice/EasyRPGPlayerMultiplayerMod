@@ -36,6 +36,8 @@
 #include "bitmap.h"
 #include "feature.h"
 
+#include "multiplayer/settings_scene.h"
+
 constexpr int menu_command_width = 88;
 constexpr int gold_window_width = 88;
 constexpr int gold_window_height = 32;
@@ -118,6 +120,8 @@ void Scene_Menu::CreateCommandWindow() {
 		command_options.push_back(Quit);
 	}
 
+	command_options.push_back(Multiplayer);
+
 	// Add all menu items
 	std::vector<CommandOptionType>::iterator it;
 	for (it = command_options.begin(); it != command_options.end(); ++it) {
@@ -151,6 +155,9 @@ void Scene_Menu::CreateCommandWindow() {
 			break;
 		case Debug:
 			options.push_back("Debug");
+			break;
+		case Multiplayer:
+			options.push_back("Multiplayer");
 			break;
 		default:
 			options.push_back(ToString(lcf::Data::terms.menu_quit));
@@ -252,6 +259,10 @@ void Scene_Menu::UpdateCommand() {
 		case Quit:
 			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Decision));
 			Scene::Push(std::make_shared<Scene_End>());
+			break;
+		case Multiplayer:
+			Main_Data::game_system->SePlay(Main_Data::game_system->GetSystemSE(Main_Data::game_system->SFX_Decision));
+			Scene::Push(std::make_shared<Game_Multiplayer::Scene_MultiplayerSettings>());
 			break;
 		}
 	}

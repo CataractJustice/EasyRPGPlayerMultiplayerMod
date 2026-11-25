@@ -20,8 +20,14 @@ void sendChatMessage(const std::string& text, const std::string nametag, bool is
     sendMessage((unsigned char*)&chatPacket, sizeof(chatPacket));
 }
 
+void setShowOwnNametag(bool show) 
+{
+	setShouldDisplayOwnNametag(show);
+}
+
 EMSCRIPTEN_BINDINGS(my_module) {
     emscripten::function("sendName", &sendName);
     emscripten::function("sendChatMessage", &sendChatMessage);
+	emscripten::function("setShowOwnNametag", &setShowOwnNametag);
 }
 #endif

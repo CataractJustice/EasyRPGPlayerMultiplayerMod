@@ -56,7 +56,6 @@ void Connect(std::string url, std::string game, Credentials credentials)
 {
 	std::string connectionURL = url + "?game=" + game;
 	#ifdef __EMSCRIPTEN__
-	Output::Debug("Creating web socket");
 	//create emscripten WS//
 	EmscriptenWebSocketCreateAttributes ws_attrs = {
 		connectionURL.c_str(),
@@ -64,7 +63,6 @@ void Connect(std::string url, std::string game, Credentials credentials)
 		EM_TRUE
 	};
 
-	Output::Debug("Setting up callbacks");
 	emsocket = emscripten_websocket_new(&ws_attrs);
 	emscripten_websocket_set_onopen_callback(emsocket, NULL, onEmOpen);
 	emscripten_websocket_set_onclose_callback(emsocket, NULL, onEmClose);

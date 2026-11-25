@@ -60,7 +60,8 @@ public:
 		Teleport,
 		Settings,
 		LanguageMenu,
-		SceneMax
+		SceneMax,
+		Multiplayer
 	};
 
 	static lcf::rpg::SaveSystem::Scene rpgRtSceneFromSceneType(SceneType);
