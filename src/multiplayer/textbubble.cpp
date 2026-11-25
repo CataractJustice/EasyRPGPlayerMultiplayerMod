@@ -64,6 +64,10 @@ TextBubble::~TextBubble() {}
 void TextBubble::Update() 
 {
 	frame++;
+	if(frame == Settings::chatBubbleFramesBeforeFade) 
+	{
+		originalY = sprite.GetY();
+	}
 	if(frame > Settings::chatBubbleFramesBeforeFade) 
 	{
 		int framesFading = frame - Settings::chatBubbleFramesBeforeFade;
@@ -84,6 +88,7 @@ bool TextBubble::GetShouldBeDestroyed()
 
 void TextBubble::FadeNow() 
 {
+	originalY = sprite.GetY();
 	this->frame = frame < Settings::chatBubbleFramesBeforeFade ? Settings::chatBubbleFramesBeforeFade : frame;
 	this->frame += 4 * 8 / Settings::chatBubbleFloatSpeed;
 }
