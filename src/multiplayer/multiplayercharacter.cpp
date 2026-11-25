@@ -9,6 +9,7 @@
 #include "font.h"
 #include "text.h"
 #include "async_handler.h"
+#include "nametags.h"
 #include <cmath>
 
 #define MOVE_QUEUE_CAPACITY 8
@@ -42,7 +43,7 @@ void MultiplayerCharacter::Update()
 			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
 			this->nametag_sprite = std::make_unique<Sprite>();
 			DrawableMgr::SetLocalList(old_list);
-			UpdateNametagBitmap();
+			Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 		}
 	}
 
@@ -67,6 +68,10 @@ void MultiplayerCharacter::Update()
 		this->nametag_sprite->SetVisible(visible);
 		if (visible) {
 			unsigned int stackHeight = 0;
+			if(this->GetX() == Main_Data::game_player->GetX() && this->GetY() == Main_Data::game_player->GetY()) 
+			{
+				stackHeight++;
+			}
 			for(auto[id, character] : characters) 
 			{
 				if(id > this->id && character->GetX() == this->GetX() && character->GetY() == this->GetY()) 
@@ -75,8 +80,7 @@ void MultiplayerCharacter::Update()
 				}
 			}
 			this->nametag_sprite->SetX(this->GetScreenX());
-			int chara_height = (this->sprite && this->sprite->GetHeight() > 0) ? this->sprite->GetHeight() : 32;
-			this->nametag_sprite->SetY(this->GetScreenY() - chara_height + 10 - (8) * stackHeight);
+			this->nametag_sprite->SetY(this->GetScreenY() - 32 + 10 - (8) * stackHeight);
 			this->nametag_sprite->SetZ(Priority_EventsAbove + 1000);
 			this->nametag_sprite->SetOpacity(this->GetOpacity());
 			this->nametag_sprite->SetTone(Main_Data::game_screen->GetTone());
@@ -147,7 +151,7 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	}
 
 	SetFlash(255, 255, 255, 0, 0);
-	UpdateNametagBitmap();
+	Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 	Output::Debug("New Multiplayer Character Created, id: {}.", id);
 }
 
@@ -170,61 +174,10 @@ MultiplayerCharacter::~MultiplayerCharacter()
 	}
 }
 
-void MultiplayerCharacter::UpdateNametagBitmap() 
-{
-	if (this->nametag.empty()) {
-		if (nametag_sprite) {
-			nametag_sprite->SetBitmap(nullptr);
-		}
-		return;
-	}
-
-	FontRef font = Font::Tiny();
-	if (!font) {
-		return;
-	}
-
-	Rect text_size = Text::GetSize(*font, this->nametag);
-	if (text_size.width <= 0 || text_size.height <= 0) {
-		return;
-	}
-
-	BitmapRef system = Cache::System(this->systemname);
-	if (!system) {
-		system = Cache::SystemOrBlack();
-	}
-
-	int padding = 0;
-	int w = text_size.width + padding * 2;
-	int h = text_size.height + padding * 2;
-	BitmapRef bmp = Bitmap::Create(w, h, Color(0, 0, 0, 0));
-	if (!bmp) {
-		return;
-	}
-
-	Text::Draw(*bmp, padding, padding, *font, *system, 0, this->nametag);
-
-	if (!nametag_sprite) {
-		auto scene_map = Scene::Find(Scene::SceneType::Map);
-		if (scene_map) {
-			auto old_list = &DrawableMgr::GetLocalList();
-			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
-			nametag_sprite = std::make_unique<Sprite>();
-			DrawableMgr::SetLocalList(old_list);
-		}
-	}
-
-	if (nametag_sprite) {
-		nametag_sprite->SetBitmap(bmp);
-		nametag_sprite->SetOx(w / 2);
-		nametag_sprite->SetOy(h);
-	}
-}
-
 void MultiplayerCharacter::OnSystemGraphicReady(FileRequestResult* result) 
 {
 	if (result && result->success) {
-		UpdateNametagBitmap();
+		Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 	}
 }
 
@@ -238,7 +191,7 @@ void MultiplayerCharacter::SetSystem(const std::string& newsystem)
 			system_request_id = request->Bind(&MultiplayerCharacter::OnSystemGraphicReady, this);
 			request->Start();
 		}
-		UpdateNametagBitmap();
+		Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 	}
 }
 
@@ -246,7 +199,7 @@ void MultiplayerCharacter::SetNametag(const std::string& newnametag)
 {
 	if (this->nametag != newnametag) {
 		this->nametag = newnametag;
-		UpdateNametagBitmap();
+		Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 	}
 }
 

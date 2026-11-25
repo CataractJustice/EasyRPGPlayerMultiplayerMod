@@ -528,6 +528,8 @@ add_library(${PROJECT_NAME} OBJECT
 	src/multiplayer/callbacks.cpp
 	src/multiplayer/settings.h
 	src/multiplayer/settings.cpp
+	src/multiplayer/nametags.h
+	src/multiplayer/nametags.cpp
 )
 
 # Multiplayer mod

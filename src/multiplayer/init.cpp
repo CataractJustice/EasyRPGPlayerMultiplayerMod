@@ -23,6 +23,7 @@ std::string getServerURL()
 	return result ? result : "";
 }
 #else
+
 std::string getGameName() 
 {
 	/*TO-DO: implement*/
@@ -52,6 +53,7 @@ void MultiplayerUpdate()
 {
 	ConnectionUpdate();
 	MultiplayerCharacter::UpdateCharacters();
+	updateOwnNametag();
 }
 
 void MultiplayerClose() 

@@ -23,7 +23,6 @@ private:
 
 	FileRequestBinding system_request_id;
 
-	void UpdateNametagBitmap();
 	void OnSystemGraphicReady(FileRequestResult* result);
 
 public:
