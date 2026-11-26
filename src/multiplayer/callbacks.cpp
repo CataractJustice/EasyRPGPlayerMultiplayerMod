@@ -3,7 +3,7 @@
 #include "packets/nametagpacket.h"
 #include "packets/chatmsgpacket.h"
 #include "settings.h"
-
+#include "init.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/bind.h>
 void sendName(const std::string& username) {
@@ -18,6 +18,7 @@ void sendChatMessage(const std::string& text, const std::string nametag, bool is
 	unsigned char flags = isGlobal ? DataPacketFlag::broadcastForGame : DataPacketFlag::broadcastForMap;
 	OChatMsgPacket chatPacket(text, nametag, flags);
     sendMessage((unsigned char*)&chatPacket, sizeof(chatPacket));
+	if(Settings::chatBubbles) CreateOwnTextBubble(text);
 }
 
 void setShowOwnNametag(bool show) 

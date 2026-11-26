@@ -170,7 +170,18 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			return;
 		INametagPacket nametag;
 		memcpy(&nametag, packetData, sizeof(INametagPacket));
-		dataOwnerCharacter->SetNametag(std::string(nametag.nametag, strnlen(nametag.nametag, max_nametag_byte_length)));
+		nametag.nametag[max_nametag_byte_length - 1] = 0;
+		for(int i = 0; i < max_nametag_byte_length; i++) 
+		{
+			if(
+				(nametag.nametag[i] < 'a' || nametag.nametag[i] > 'z') &&
+				(nametag.nametag[i] < 'A' || nametag.nametag[i] > 'Z') &&
+				(nametag.nametag[i] < '0' || nametag.nametag[i] > '9') &&
+				nametag.nametag[i] != '_' &&
+				nametag.nametag[i] != '-'
+			) nametag.nametag[i] = '-';
+		}
+		dataOwnerCharacter->SetNametag(std::string(nametag.nametag, strnlen(nametag.nametag, 8)));
 	}
 	break;
 
