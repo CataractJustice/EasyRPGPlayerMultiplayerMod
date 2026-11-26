@@ -175,13 +175,7 @@ void sendMessage(unsigned char* data, unsigned int byteLength)
 }
 
 void onMessage(unsigned char* data, unsigned int byteLength) 
-{	
-	std::string decmsg = "";
-	for(int i = 0; i < byteLength; i++) 
-	{
-		decmsg += std::to_string((int)data[i]) + " ";
-	}
-	Output::Debug("Multiplayer message: {}", decmsg);
+{
 	IncomingPacket packet;
 	memcpy(&packet, data, sizeof(packet));
 	switch (packet.type)

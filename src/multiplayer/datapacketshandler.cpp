@@ -38,12 +38,6 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		return;
 	}
 	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
-	Output::Debug(
-	"packet: byteLength="+std::to_string(byteLength) + 
-	";slot=" + std::to_string(packetHeader.slot) + 
-	";ownerId="+std::to_string(packetHeader.ownerId) +
-	";mapId="+std::to_string(packetHeader.mapId)+
-	";scope="+std::to_string(packetHeader.scope)+";");
 	if(packetHeader.slot >= DataPacketSlot::lastSlot) 
 	{
 		Output::Warning("Received data with unknown slot {} with owner id {}", packetHeader.slot, packetHeader.ownerId);
