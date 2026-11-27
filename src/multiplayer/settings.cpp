@@ -15,6 +15,7 @@
 #include "game_screen.h"
 #include "game_system.h"
 #include "nametags.h"
+#include "output.h"
 
 namespace Settings 
 {
@@ -128,6 +129,12 @@ void updateOwnNametag()
 
 void updateOwnNametagBitmap() 
 {
+	// own_nametag_sprite is created lazily once a map scene exists. sendName
+	// can arrive before that (e.g. right after the wasm runtime boots), so
+	// guard against dereferencing a null sprite.
+	if (!own_nametag_sprite) {
+		return;
+	}
 	Nametags::UpdateNametagBitmap(*own_nametag_sprite, clientUsername, std::string(Main_Data::game_system->GetSystemName()), Main_Data::game_player.get());
 }
 
@@ -146,6 +153,10 @@ bool hasCustomSprite()
 }
 void setCustomSprite(const std::string& sheet, int index) 
 {
+	if(!hasCustomSprite()) 
+	{
+		storeRealSprite(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
+	}
 	customSpriteSheet = sheet;
 	customSpriteIndex = index;
 	Main_Data::game_player->SetSpriteGraphic(customSpriteSheet, customSpriteIndex);
@@ -163,6 +174,7 @@ void storeRealSprite(const std::string& sheet, int index)
 {
 	realSpriteSheet = sheet;
 	realSpriteIndex = index;
+	Output::Debug(sheet);
 }
 
 void getCustomSprite(std::string& sheet, int& index) 

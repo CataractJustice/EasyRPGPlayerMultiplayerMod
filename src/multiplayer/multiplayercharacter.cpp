@@ -13,6 +13,9 @@
 #include <cmath>
 #include "settings.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 #define MOVE_QUEUE_CAPACITY 8
 
 void MultiplayerCharacter::MultiplayerMove(int x, int y) 
@@ -122,28 +125,29 @@ void MultiplayerCharacter::Update()
 
 	// Update and remove message bubbles
 	auto scene_map = Scene::Find(Scene::SceneType::Map);
-    for (auto it = text_bubbles.begin(); it != text_bubbles.end(); ) {
-        it->get()->Update();
-        if (it->get()->GetShouldBeDestroyed()) {
+	 for (auto it = text_bubbles.begin(); it != text_bubbles.end(); ) {
+		  it->get()->Update();
+		  if (it->get()->GetShouldBeDestroyed()) {
 			auto old_list = &DrawableMgr::GetLocalList();
 			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
-            it = text_bubbles.erase(it);
+				it = text_bubbles.erase(it);
 			DrawableMgr::SetLocalList(old_list);
-        } else {
-            ++it;
-        }
-    }
+		  } else {
+				++it;
+		  }
+	 }
 }
 
 void MultiplayerCharacter::UpdateNextMovementAction() {};
 
-MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MPlayer)
+MultiplayerCharacter::MultiplayerCharacter(uint64_t id) : Game_PlayerBase(MPlayer)
 {
 	for(int i = 0; i < ACTOR_SLOTS; i++) 
 	{
 		actors[i] = nullptr;
 	}
-	this->nametag = std::to_string(id);
+	//Uncomment to show user id as nametag for debugging 
+	//this->nametag = std::to_string(id);
 	this->systemname = (std::string)Main_Data::game_system->GetSystemName();
 	this->id = id;
 	this->SetSpriteGraphic(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
@@ -168,6 +172,29 @@ MultiplayerCharacter::MultiplayerCharacter(unsigned int id) : Game_PlayerBase(MP
 	SetFlash(255, 255, 255, 0, 0);
 	Nametags::UpdateNametagBitmap(*this->nametag_sprite, this->nametag, this->systemname, this);
 	Output::Debug("New Multiplayer Character Created, id: {}.", id);
+	
+	#ifdef __EMSCRIPTEN__
+	std::string userIdStr = std::to_string(this->id);
+	EM_ASM({
+		 (async () => {
+			  try {
+					const user = await window.parent.EasyRPGMultiplayer.getUsernameById(
+						UTF8ToString($0)
+					);
+
+					console.log("Got user");
+					console.log(user);
+					if (!user || !user.username || !user.id)
+						 return;
+
+					console.log("Calling callback");
+					window.easyrpgPlayer.setUserNametagById(user.id, user.username);
+			  } catch (error) {
+					console.error("Failed to load username:", error);
+			  }
+		 })();
+	}, userIdStr.c_str());
+	#endif
 }
 
 MultiplayerCharacter::~MultiplayerCharacter() 
@@ -218,7 +245,7 @@ void MultiplayerCharacter::SetNametag(const std::string& newnametag)
 	}
 }
 
-void MultiplayerCharacter::MakeCharacter(unsigned int id) 
+void MultiplayerCharacter::MakeCharacter(uint64_t id) 
 {
 	characters[id] = std::make_shared<MultiplayerCharacter>(id);
 }
@@ -231,7 +258,7 @@ void MultiplayerCharacter::UpdateCharacters()
 	}
 }
 
-void MultiplayerCharacter::RemovePlayer(unsigned int id) 
+void MultiplayerCharacter::RemovePlayer(uint64_t id) 
 {
 	auto characterIterator = characters.find(id);
 	if(characterIterator == characters.cend()) 
@@ -252,7 +279,7 @@ void MultiplayerCharacter::RemovePlayer(unsigned int id)
 	Output::Debug("Removed player, id: {}.", id);
 }
 
-std::shared_ptr<MultiplayerCharacter> MultiplayerCharacter::GetPlayer(unsigned int id) 
+std::shared_ptr<MultiplayerCharacter> MultiplayerCharacter::GetPlayer(uint64_t id) 
 {
 	auto characterIterator = characters.find(id);
 	if(characterIterator == characters.cend()) 
@@ -300,7 +327,7 @@ void MultiplayerCharacter::PlaySound(lcf::rpg::Sound sound)
 	Main_Data::game_system->SePlay(sound);
 }
 
-std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>> MultiplayerCharacter::characters = std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>>();
+std::map<uint64_t, std::shared_ptr<MultiplayerCharacter>> MultiplayerCharacter::characters = std::map<uint64_t, std::shared_ptr<MultiplayerCharacter>>();
 
 void FullresDrawPass(BitmapRef&, int) 
 {
@@ -361,4 +388,9 @@ void MultiplayerCharacter::CreateMessageBubble(const std::string text)
 void MultiplayerCharacter::OnMapDispose() 
 {
 	ClearCharacters();
+}
+
+int MultiplayerCharacter::GetPlayerCount() 
+{
+	return MultiplayerCharacter::characters.size() + 1;
 }

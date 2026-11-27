@@ -9,6 +9,7 @@
 #include "datapacketshandler.h"
 #include "init.h"
 #include "settings.h"
+#include "credentials.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/websocket.h>
 EMSCRIPTEN_WEBSOCKET_T emsocket;
@@ -41,6 +42,8 @@ std::queue<std::pair<unsigned char*, unsigned int>> packetQ;
 std::mutex packetQLock;
 #endif
 
+Credentials g_credentials;
+
 void onMessageAsync(unsigned char* data, unsigned int byteLength) 
 {
 	#ifndef __EMSCRIPTEN__
@@ -54,6 +57,7 @@ void onMessageAsync(unsigned char* data, unsigned int byteLength)
 
 void Connect(std::string url, std::string game, Credentials credentials) 
 {
+	g_credentials = credentials;
 	std::string connectionURL = url + "?game=" + game;
 	#ifdef __EMSCRIPTEN__
 	//create emscripten WS//
@@ -74,6 +78,11 @@ void Connect(std::string url, std::string game, Credentials credentials)
 	webSocket.setUrl(connectionURL.c_str());
 	webSocket.setHandshakeTimeout(5);
 	webSocket.disablePerMessageDeflate();
+	
+	if (!g_credentials.authToken.empty()) {
+		webSocket.setExtraHeaders({{"Cookie", "auth_token=" + g_credentials.authToken}});
+	}
+	
 	Output::Debug("Multiplayer Setting WebSocket callbacks.");
 	webSocket.setOnMessageCallback([](const ix::WebSocketMessagePtr& msg)
 		{
@@ -185,7 +194,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 		if(sizeof(ConnectPacket) != byteLength) return;
 		ConnectPacket connectPacket;
 		memcpy(&connectPacket, data, byteLength);
-		MultiplayerCharacter::MakeCharacter(connectPacket.id);
+		MultiplayerCharacter::MakeCharacter(connectPacket.accountId);
 	}
 		break;
 	case IPacketType::inmap: 
@@ -193,7 +202,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 		if(sizeof(InMapPacket) != byteLength) return;
 		InMapPacket inMapPacket;
 		memcpy(&inMapPacket, data, byteLength);
-		MultiplayerCharacter::MakeCharacter(inMapPacket.id);
+		MultiplayerCharacter::MakeCharacter(inMapPacket.accountId);
 	}
 	break;
 
@@ -202,7 +211,7 @@ void onMessage(unsigned char* data, unsigned int byteLength)
 		if(sizeof(DisconnectPacket) != byteLength) return;
 		DisconnectPacket disconnectPacket;
 		memcpy(&disconnectPacket, data, byteLength);
-		MultiplayerCharacter::RemovePlayer(disconnectPacket.id);
+		MultiplayerCharacter::RemovePlayer(disconnectPacket.accountId);
 	}
 	break;
 

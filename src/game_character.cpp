@@ -1285,6 +1285,7 @@ void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
 			sendPacket(OSpritePacket(sprite_name, index));
 			if(hasCustomSprite()) 
 			{
+				storeRealSprite(sprite_name, index);
 				getCustomSprite(data()->sprite_name, data()->sprite_id);
 				return;
 			}

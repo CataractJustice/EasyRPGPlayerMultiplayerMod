@@ -10,12 +10,13 @@
 #include <queue>
 #include <string>
 #include <memory>
+#include <cstdint>
 #include "textbubble.h"
 
 class MultiplayerCharacter : public Game_PlayerBase
 {
 private:
-	unsigned int id;
+    uint64_t id;
 	std::string nametag;
 	std::string systemname;
 	std::queue<std::pair<int, int>> moveQueue;
@@ -31,10 +32,10 @@ public:
 	std::unique_ptr<Sprite_Character> sprite;
 	std::unique_ptr<Sprite> nametag_sprite;
 
-	MultiplayerCharacter(unsigned int id);
+	MultiplayerCharacter(uint64_t id);
 	~MultiplayerCharacter() override;
 
-	static void MakeCharacter(unsigned int id);
+	static void MakeCharacter(uint64_t id);
 
 	void MultiplayerMove(int x, int y);
 
@@ -65,17 +66,18 @@ public:
 
 	static void UpdateCharacters();
 	static void ClearCharacters();
-	static void RemovePlayer(unsigned int id);
+	static void RemovePlayer(uint64_t id);
 
 	std::unique_ptr<Game_Party>& GetPlayerParty();
-	std::set<unsigned int> GetMyCoopParty();
+	std::set<uint64_t> GetMyCoopParty();
 	
-	static std::shared_ptr<MultiplayerCharacter> GetPlayer(unsigned int id);
+	static std::shared_ptr<MultiplayerCharacter> GetPlayer(uint64_t id);
 	
-	static std::map<unsigned int, std::shared_ptr<MultiplayerCharacter>> characters;
+	static std::map<uint64_t, std::shared_ptr<MultiplayerCharacter>> characters;
 
 	static std::vector<Game_Actor*> GetAllParties();
 
 	static void OnMapDispose();
 	void CreateMessageBubble(const std::string text);
+	static int GetPlayerCount();
 };

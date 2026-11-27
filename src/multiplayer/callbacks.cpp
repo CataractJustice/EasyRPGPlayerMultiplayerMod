@@ -4,6 +4,8 @@
 #include "packets/chatmsgpacket.h"
 #include "settings.h"
 #include "init.h"
+#include "multiplayercharacter.h"
+#include "output.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/bind.h>
 void sendName(const std::string& username) {
@@ -26,11 +28,25 @@ void setShowOwnNametag(bool show)
 	setShouldDisplayOwnNametag(show);
 }
 
+int getMapPlayerCount() 
+{
+	return MultiplayerCharacter::GetPlayerCount();
+}
+
+void setUserNametagById(const std::string& userId64, const std::string& username) 
+{
+	Output::Debug("Username loaded");
+	uint64_t userId = std::stoull(userId64);
+	MultiplayerCharacter::characters[userId]->SetNametag(username);
+}
+
 EMSCRIPTEN_BINDINGS(my_module) {
     emscripten::function("sendName", &sendName);
     emscripten::function("sendChatMessage", &sendChatMessage);
 	emscripten::function("setShowOwnNametag", &setShowOwnNametag);
 	emscripten::function("setOwnSprite", &setCustomSprite);
 	emscripten::function("unsetOwnSprite", &restoreRealSprite);
+	emscripten::function("getMapPlayerCount", &getMapPlayerCount);
+	emscripten::function("setUserNametagById", &setUserNametagById);
 }
 #endif

@@ -26,6 +26,47 @@ std::string getServerURL()
 	);
 	return result ? result : "";
 }
+
+Credentials getCredentials()
+{
+    Credentials creds;
+    const char* authToken = emscripten_run_script_string(
+        "window.parent.EasyRPGMultiplayer.getAuthToken ? window.parent.EasyRPGMultiplayer.getAuthToken() : ''"
+    );
+    if (authToken && strlen(authToken) > 0) {
+        creds.authToken = authToken;
+    }
+    
+    const char* accountIdStr = emscripten_run_script_string(
+        "window.parent.EasyRPGMultiplayer.getAccountId ? window.parent.EasyRPGMultiplayer.getAccountId() : ''"
+    );
+    if (accountIdStr && strlen(accountIdStr) > 0) {
+        creds.accountId = strtoull(accountIdStr, nullptr, 10);
+    }
+    
+    const char* accountType = emscripten_run_script_string(
+        "window.parent.EasyRPGMultiplayer.getAccountType ? window.parent.EasyRPGMultiplayer.getAccountType() : ''"
+    );
+    if (accountType && strlen(accountType) > 0) {
+        creds.accountType = accountType;
+    }
+    
+    const char* username = emscripten_run_script_string(
+        "window.parent.EasyRPGMultiplayer.getUsername ? window.parent.EasyRPGMultiplayer.getUsername() : ''"
+    );
+    if (username && strlen(username) > 0) {
+        creds.username = username;
+    }
+    
+    const char* guestUuid = emscripten_run_script_string(
+        "window.parent.EasyRPGMultiplayer.getGuestUuid ? window.parent.EasyRPGMultiplayer.getGuestUuid() : ''"
+    );
+    if (guestUuid && strlen(guestUuid) > 0) {
+        creds.guestUuid = guestUuid;
+    }
+    
+    return creds;
+}
 #else
 
 std::string getGameName() 
@@ -36,6 +77,11 @@ std::string getGameName()
 std::string getServerURL() 
 {
 	return "ws://localhost:4040";
+}
+
+Credentials getCredentials()
+{
+    return Credentials();
 }
 #endif
 
@@ -89,7 +135,8 @@ void UpdateOwnTextBubbles()
 void MultiplayerStart() 
 {
 	Output::Debug("Multiplayer start");
-	Connect(getServerURL(), getGameName(), Credentials());
+	Credentials creds = getCredentials();
+	Connect(getServerURL(), getGameName(), creds);
 	Output::Debug("Multiplayer started");
 }
 

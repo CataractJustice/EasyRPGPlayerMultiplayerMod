@@ -1,5 +1,6 @@
 #pragma once
 #include "basepacket.h"
+#include <cstdint>
 #pragma pack(push)
 #pragma pack(1)
 struct DataPacketFlag
@@ -73,7 +74,7 @@ struct DataPacketSlot
 struct IDataPacket : IncomingPacket
 {
 	unsigned char scope;
-	unsigned int ownerId;
+	uint64_t ownerId;
 	unsigned int mapId;
 	unsigned short slot;
 };

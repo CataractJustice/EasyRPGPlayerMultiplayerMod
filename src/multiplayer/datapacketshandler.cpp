@@ -29,6 +29,7 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 	if(sizeof(IDataPacket) > byteLength)
 		return;
 	IDataPacket packetHeader;
+	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
 	if(
 		!(packetHeader.scope & DataPacketFlag::broadcastForGame) && 
 		!(packetHeader.scope & DataPacketFlag::broadcastForServer) &&
@@ -37,7 +38,6 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 	{
 		return;
 	}
-	memcpy(&packetHeader, packetData, sizeof(IDataPacket));
 	if(packetHeader.slot >= DataPacketSlot::lastSlot) 
 	{
 		Output::Warning("Received data with unknown slot {} with owner id {}", packetHeader.slot, packetHeader.ownerId);
@@ -165,17 +165,20 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 		INametagPacket nametag;
 		memcpy(&nametag, packetData, sizeof(INametagPacket));
 		nametag.nametag[max_nametag_byte_length - 1] = 0;
-		for(int i = 0; i < max_nametag_byte_length; i++) 
+		size_t len = strnlen(nametag.nametag, max_nametag_byte_length);
+		for(size_t i = 0; i < len; i++) 
 		{
+			char c = nametag.nametag[i];
+			if(c == 0) break;
 			if(
-				(nametag.nametag[i] < 'a' || nametag.nametag[i] > 'z') &&
-				(nametag.nametag[i] < 'A' || nametag.nametag[i] > 'Z') &&
-				(nametag.nametag[i] < '0' || nametag.nametag[i] > '9') &&
-				nametag.nametag[i] != '_' &&
-				nametag.nametag[i] != '-'
+				(c < 'a' || c > 'z') &&
+				(c < 'A' || c > 'Z') &&
+				(c < '0' || c > '9') &&
+				c != '_' &&
+				c != '-'
 			) nametag.nametag[i] = '-';
 		}
-		dataOwnerCharacter->SetNametag(std::string(nametag.nametag, strnlen(nametag.nametag, 8)));
+		dataOwnerCharacter->SetNametag(std::string(nametag.nametag, len));
 	}
 	break;
 
@@ -202,9 +205,10 @@ void HandleDataPacket(unsigned char* packetData, int byteLength)
 			window.parent.EasyRPGMultiplayer.receiveMessage({
 				author: UTF8ToString($0),
 				message: UTF8ToString($1),
-				isGlobal: $2
+				isGlobal: $2,
+				mapId: $3
 			});
-		}, author.c_str(), msg.message, isGlobal);
+		}, author.c_str(), msg.message, isGlobal, msg.mapId);
 		#endif
 		#endif
 	}
