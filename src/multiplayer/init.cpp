@@ -5,6 +5,7 @@
 #include "multiplayer/multiplayercharacter.h"
 #include <emscripten.h>
 #include "settings.h"
+#include "multiplayerstate.h"
 #include "textbubble.h"
 #include "main_data.h"
 #include "drawable_mgr.h"
@@ -132,9 +133,10 @@ void UpdateOwnTextBubbles()
 	}
 }
 
-void MultiplayerStart() 
+void MultiplayerStart()
 {
 	Output::Debug("Multiplayer start");
+	Settings::LoadAll();
 	Credentials creds = getCredentials();
 	Connect(getServerURL(), getGameName(), creds);
 	Output::Debug("Multiplayer started");

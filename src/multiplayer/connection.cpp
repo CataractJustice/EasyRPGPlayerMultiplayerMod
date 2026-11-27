@@ -8,7 +8,7 @@
 #include "packets/disconnectpacket.h"
 #include "datapacketshandler.h"
 #include "init.h"
-#include "settings.h"
+#include "multiplayerstate.h"
 #include "credentials.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten/websocket.h>

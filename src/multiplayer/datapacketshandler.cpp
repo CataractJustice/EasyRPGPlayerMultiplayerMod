@@ -17,6 +17,7 @@
 #include "packets/actorinfopacket.h"
 #include "packets/nametagpacket.h"
 #include "settings.h"
+#include "multiplayerstate.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif

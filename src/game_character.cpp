@@ -45,7 +45,7 @@
 #include "multiplayer/packets/flashpacket.h"
 #include "multiplayer/packets/hidespritepacket.h"
 #include "multiplayer/packets/transparencypacket.h"
-#include "multiplayer/settings.h"
+#include "multiplayer/multiplayerstate.h"
 
 Game_Character::Game_Character(Type type, lcf::rpg::SaveMapEventBase* d) :
 	_type(type), _data(d)

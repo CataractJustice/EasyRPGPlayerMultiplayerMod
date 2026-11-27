@@ -40,7 +40,7 @@
 //multiplayer
 #include "multiplayer/connection.h"
 #include "multiplayer/packets/systempacket.h"
-#include "multiplayer/settings.h"
+#include "multiplayer/multiplayerstate.h"
 
 Game_System::Game_System()
 	: dbsys(&lcf::Data::system)

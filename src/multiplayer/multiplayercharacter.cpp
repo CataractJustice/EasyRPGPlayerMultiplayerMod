@@ -12,6 +12,7 @@
 #include "nametags.h"
 #include <cmath>
 #include "settings.h"
+#include "multiplayerstate.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>

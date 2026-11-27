@@ -1,23 +1,7 @@
 #include "settings.h"
-#include "connection.h"
-#include "packets/nametagpacket.h"
-#include "packets/positionpacket.h"
-#include "packets/movespeedpacket.h"
-#include "packets/systempacket.h"
-#include "init.h"
 #include <emscripten.h>
-#include "sprite.h"
-#include "game_player.h"
-#include "main_data.h"
-#include "drawable_mgr.h"
-#include "scene_map.h"
-#include "game_system.h"
-#include "game_screen.h"
-#include "game_system.h"
-#include "nametags.h"
-#include "output.h"
 
-namespace Settings 
+namespace Settings
 {
 	bool sfxSync = true;
 	int sfxVolume = 100;
@@ -33,152 +17,80 @@ namespace Settings
 	int chatBubbleFadeFrames = 60;
 	int chatBubbleFramesBeforeFade = 60;
 	int chatBubbleFloatSpeed = 4;
-}
 
-std::string clientUsername = "";
-int currentMapId = -1;
-
-std::string customSpriteSheet = "";
-int customSpriteIndex = -1;
-std::string realSpriteSheet = "";
-int realSpriteIndex = -1;
-
-std::unique_ptr<Sprite> own_nametag_sprite;
-
-const std::string& getClientUsername() 
-{
-	return clientUsername;
-}
-void setClientUsername(const std::string& username) 
-{
-	if(username.length() > max_nametag_byte_length - 1) return;
-	clientUsername = username;
-	updateOwnNametagBitmap();
-}
-
-void setCurrentMapId(int map) 
-{
-	currentMapId = map;
-	#ifdef __EMSCRIPTEN__
-	EM_ASM({
-		window.parent.EasyRPGMultiplayer.setMapIdStatus(UTF8ToString($0));
-	}, std::to_string(map).c_str());
-	#endif
-}
-
-int getCurrentMapId() 
-{
-	return currentMapId;
-}
-
-void sendAllSettings() 
-{
-	if(currentMapId >= 0) 
-	{
-		ChangeMap(currentMapId);
+	void LoadSetting(const std::string& name, int* ptr) {
+		*ptr = EM_ASM_INT({
+			let settingName = "MultiplayerSettings[" + UTF8ToString($0) + "]";
+			return (window.localStorage.hasOwnProperty(settingName)) ? window.localStorage[settingName] : $1;
+		}, name.c_str(), *ptr);
 	}
-	if(clientUsername.empty() == false) 
-	{
-		ONametagPacket nametagPacket(clientUsername);
-		sendMessage((unsigned char*)&nametagPacket, sizeof(nametagPacket));
+
+	void SaveSetting(const std::string& name, int value) {
+		EM_ASM({
+			window.localStorage["MultiplayerSettings[" + UTF8ToString($0) + "]"] = $1;
+		}, name.c_str(), value);
 	}
-	OPositionPacket positionPacket(Main_Data::game_player->GetX(), Main_Data::game_player->GetY());
-	sendMessage((unsigned char*)&positionPacket, sizeof(positionPacket));
-	OMoveSpeedPacket speedPacket(Main_Data::game_player->GetMoveSpeed());
-	sendMessage((unsigned char*)&speedPacket, sizeof(speedPacket));
-	OSystemPacket systemPacket(std::string(Main_Data::game_system->GetSystemName()));
-	sendMessage((unsigned char*)&systemPacket, sizeof(systemPacket));
-}
 
-bool getShouldDisplayOwnNametag() 
-{
-	return Settings::drawOwnNametag;
-}
-
-void setShouldDisplayOwnNametag(bool value) 
-{
-	Settings::drawOwnNametag = value;
-}
-
-void updateOwnNametag() 
-{
-	if (!own_nametag_sprite) {
-		auto scene_map = Scene::Find(Scene::SceneType::Map);
-		if (scene_map) {
-			auto old_list = &DrawableMgr::GetLocalList();
-			DrawableMgr::SetLocalList(&scene_map->GetDrawableList());
-			own_nametag_sprite = std::make_unique<Sprite>();
-			DrawableMgr::SetLocalList(old_list);
-			updateOwnNametagBitmap();
+	void LoadAll() {
+		for (const SettingItem& item : GetItems()) {
+			if (item.type == SettingType::Switch && item.boolTarget) {
+				LoadSetting(item.name, (int*)item.boolTarget);
+			} else if (item.type == SettingType::Range && item.intTarget) {
+				LoadSetting(item.name, item.intTarget);
+			}
 		}
 	}
 
-	if (own_nametag_sprite) {
-		bool visible = getShouldDisplayOwnNametag() && Main_Data::game_player->IsVisible();
-		own_nametag_sprite->SetVisible(visible);
-		if (visible) {
-			own_nametag_sprite->SetX(Main_Data::game_player->GetScreenX());
-			own_nametag_sprite->SetY(Main_Data::game_player->GetScreenY() - 32 + 10);
-			own_nametag_sprite->SetZ(Priority_EventsAbove + 1000);
-			own_nametag_sprite->SetOpacity(Main_Data::game_player->GetOpacity());
-			own_nametag_sprite->SetTone(Main_Data::game_screen->GetTone());
-			own_nametag_sprite->SetFlashEffect(Main_Data::game_player->GetFlashColor());
+	const std::vector<SettingItem>& GetItems() {
+		static const std::vector<SettingItem> items = {
+			{ "SFX sync", "Lets you hear sound effects that other players produce", SettingType::Switch, &sfxSync },
+			{ "SFX distance", "Maximum distance at which you can hear players", SettingType::Range, nullptr, &sfxDistance, 4, 32, 1 },
+			{ "SFX volume", "Volume of the sound effects that other players produce", SettingType::Range, nullptr, &sfxVolume, 0, 100, 2 },
+			{ "Event movement synchronisation", "Lets you and other players see NPCs at same positions", SettingType::Switch, &npcSync },
+			{ "Event sprite synchronisation", "Lets you and other players see NPCs with the same sprites", SettingType::Switch, &npcSpriteSync },
+			{ "Event activity synchronisation", "Lets you and other players see same active NPCs", SettingType::Switch, &npcActivitySync },
+			{ "Own nametag", "Lets you see your own nametag", SettingType::Switch, &drawOwnNametag },
+			{ "Nametags", "Lets you see usernames of the players in game", SettingType::Switch, &drawOtherNametags },
+			{ "Nametags system sync", "Render nametags with system colors that player is using", SettingType::Switch, &nametagSystemSync },
+			{ "Global chat", "Toggle global chat visibility", SettingType::Action, nullptr, nullptr, 0, 0, 1, &ToggleGlobalChatVisibility },
+			{ "Reconnect", "Disconnect, clear players & connect again", SettingType::Action, nullptr, nullptr, 0, 0, 1, &Reconnect },
+			{ "Chat bubbles", "Show sent messages above players who sent them", SettingType::Switch, &chatBubbles },
+			{ "Chat bubble show frames", "How long chat bubble should stay before fading away", SettingType::Range, nullptr, &chatBubbleFramesBeforeFade, 20, 240, 20 },
+			{ "Chat bubble fade frames", "How long does it take chat bubble to fade", SettingType::Range, nullptr, &chatBubbleFadeFrames, 0, 240, 20 },
+			{ "Chat bubble float speed", "How fast should chat bubble float up", SettingType::Range, nullptr, &chatBubbleFloatSpeed, 0, 16, 1 },
+		};
+		return items;
+	}
+
+	ActionResult HandleAction(const SettingItem& item, Input::InputButton action) {
+		switch (item.type) {
+		case SettingType::Switch:
+			if (item.boolTarget) {
+				*item.boolTarget = !*item.boolTarget;
+				SaveSetting(item.name, (int)*item.boolTarget);
+			}
+			return ActionResult::Handled;
+		case SettingType::Range: {
+			if (!item.intTarget) {
+				return ActionResult::Handled;
+			}
+			if (action == Input::InputButton::LEFT) {
+				*item.intTarget -= item.step;
+			} else if (action == Input::InputButton::RIGHT) {
+				*item.intTarget += item.step;
+			}
+
+			ActionResult result = (*item.intTarget < item.min || *item.intTarget > item.max) ? ActionResult::Buzzer : ActionResult::Cursor;
+
+			if (*item.intTarget > item.max) *item.intTarget = item.max;
+			if (*item.intTarget < item.min) *item.intTarget = item.min;
+
+			SaveSetting(item.name, *item.intTarget);
+			return result;
 		}
+		case SettingType::Action:
+			return (item.action && item.action(action)) ? ActionResult::Handled : ActionResult::Buzzer;
+		}
+		return ActionResult::Handled;
 	}
-}
-
-void updateOwnNametagBitmap() 
-{
-	// own_nametag_sprite is created lazily once a map scene exists. sendName
-	// can arrive before that (e.g. right after the wasm runtime boots), so
-	// guard against dereferencing a null sprite.
-	if (!own_nametag_sprite) {
-		return;
-	}
-	Nametags::UpdateNametagBitmap(*own_nametag_sprite, clientUsername, std::string(Main_Data::game_system->GetSystemName()), Main_Data::game_player.get());
-}
-
-bool getShouldDisplayNametags() 
-{
-	return Settings::drawOtherNametags;
-}
-void setShouldDisplayNametags(bool value) 
-{
-	Settings::drawOtherNametags = value;
-}
-
-bool hasCustomSprite() 
-{
-	return !customSpriteSheet.empty() && customSpriteIndex >= 0;
-}
-void setCustomSprite(const std::string& sheet, int index) 
-{
-	if(!hasCustomSprite()) 
-	{
-		storeRealSprite(Main_Data::game_player->GetSpriteName(), Main_Data::game_player->GetSpriteIndex());
-	}
-	customSpriteSheet = sheet;
-	customSpriteIndex = index;
-	Main_Data::game_player->SetSpriteGraphic(customSpriteSheet, customSpriteIndex);
-}
-void restoreRealSprite() 
-{
-	customSpriteSheet = "";
-	customSpriteIndex = -1;
-	if(!realSpriteSheet.empty() && realSpriteIndex >= 0) 
-	{
-		Main_Data::game_player->SetSpriteGraphic(realSpriteSheet, realSpriteIndex);
-	}
-}
-void storeRealSprite(const std::string& sheet, int index) 
-{
-	realSpriteSheet = sheet;
-	realSpriteIndex = index;
-	Output::Debug(sheet);
-}
-
-void getCustomSprite(std::string& sheet, int& index) 
-{
-	sheet = customSpriteSheet;
-	index = customSpriteIndex;
 }

@@ -3,6 +3,7 @@
 #include "packets/nametagpacket.h"
 #include "packets/chatmsgpacket.h"
 #include "settings.h"
+#include "multiplayerstate.h"
 #include "init.h"
 #include "multiplayercharacter.h"
 #include "output.h"
