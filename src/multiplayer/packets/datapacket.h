@@ -55,11 +55,11 @@ struct DataPacketSlot
 		mtint,//- tint screen for current map
 		weather,//-
 		jump,//+
-		chatmsg,//-
-		nametag,//-
-		system,//~
+		chatmsg,//+
+		nametag,//+
+		system,//+
 		spritebitmap,//-
-		transparency,//+
+		transparency,//?
 		active,//-
 		battlestart,//-
 		SlotsRange(actorinfo, ACTOR_SLOTS),

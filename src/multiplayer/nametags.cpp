@@ -10,8 +10,9 @@
 #include "cache.h"
 namespace Nametags 
 {
-	void UpdateNametagBitmap(Sprite& nametag_sprite, const std::string& nametag, const std::string& systemname, const Game_Character* character)
+	void UpdateNametagBitmap(Sprite& nametag_sprite, const std::string& nametagUntruncated, const std::string& systemname, const Game_Character* character)
 	{
+		std::string nametag = nametagUntruncated.substr(0, 8);
 		if (nametag.empty()) {
 			nametag_sprite.SetBitmap(nullptr);
 			return;
