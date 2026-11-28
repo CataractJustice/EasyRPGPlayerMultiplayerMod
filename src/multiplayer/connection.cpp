@@ -151,7 +151,7 @@ void ConnectionUpdate()
 		reconnectTimeout--;
 		if(reconnectTimeout <= 0) 
 		{
-			Connect(getServerURL(), getGameName(), Credentials());
+			Connect(getServerURL(), getGameName(), g_credentials);
 			reconnectTimeout = 300;
 			EM_ASM({
 				window.parent.EasyRPGMultiplayer.setConnection(false);
